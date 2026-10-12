@@ -6,6 +6,7 @@ use JothamLec\MarketingToolkit\Legacy\OldConfig;
 use JothamLec\MarketingToolkit\Tracking\Tracking;
 use Statamic\Facades\Blueprint;
 use Statamic\Facades\GlobalSet;
+use Statamic\Facades\Site;
 use Statamic\Facades\Token;
 use Statamic\Tokens\Handlers\LivePreview;
 
@@ -58,6 +59,38 @@ test('.env wins over the control panel', function () {
 
     expect(app(Tracking::class)->ids())->toMatchArray(['gtm' => 'GTM-FROMENV', 'ga4' => 'G-FROMCP123'])
         ->and(app(Tracking::class)->fromConfig())->toMatchArray(['gtm' => true, 'ga4' => false]);
+});
+
+test('each site of a multisite prints its own container, takes its origin\'s until it sets one, and can turn its tags off', function () {
+    multisite();
+    seoGlobal(['gtm_id' => 'GTM-DEFAULT1']);
+    seoGlobal([], 'cothinking');
+
+    Site::setCurrent('cothinking');
+    expect(app(Tracking::class)->ids()['gtm'])->toBe('GTM-DEFAULT1');
+
+    seoGlobal(['gtm_id' => 'GTM-COTHINK1'], 'cothinking');
+    expect(app(Tracking::class)->head())->toContain('"GTM-COTHINK1"')->not->toContain('GTM-DEFAULT1');
+
+    seoGlobal(['site_tracking' => false], 'cothinking');
+    expect(app(Tracking::class)->head())->toBe('')->and(app(Tracking::class)->body())->toBe('');
+
+    Site::setCurrent('default');
+    expect(app(Tracking::class)->head())->toContain('"GTM-DEFAULT1"');
+});
+
+test('a tracking key in the config can name each site\'s ID, and a site left out takes its own Tracking tab\'s', function () {
+    multisite();
+    seoGlobal(['gtm_id' => 'GTM-FROMCP1']);
+    seoGlobal(['gtm_id' => 'GTM-FROMCP2'], 'cothinking');
+    config(['marketing-toolkit.tracking.gtm_id' => ['default' => 'GTM-FROMENV']]);
+
+    expect(app(Tracking::class)->ids()['gtm'])->toBe('GTM-FROMENV')
+        ->and(app(Tracking::class)->fromConfig()['gtm'])->toBeTrue();
+
+    Site::setCurrent('cothinking');
+    expect(app(Tracking::class)->ids()['gtm'])->toBe('GTM-FROMCP2')
+        ->and(app(Tracking::class)->fromConfig()['gtm'])->toBeFalse();
 });
 
 test('a config/marketing-toolkit.php published with the old tracking keys keeps working', function () {

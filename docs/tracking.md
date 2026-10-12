@@ -43,6 +43,21 @@ A site that prints its own meta tags (a Laravel layout that doesn't use `<s:mt:m
     <s:mt:body />
 ```
 
+## On a multisite
+
+Each site has its own Tracking tab (Marketing settings, in that site's localization), so each site loads its own GTM container and its own tools. A site that hasn't set an ID takes its origin site's, so to load **no** tags on a site, turn off **Tracking tags on this site** in its Tracking tab; the other sites keep theirs.
+
+An ID in `config/marketing-toolkit.php` (or `.env`) wins over the Tracking tab on every site. To give each site its own, key it by site handle; a site left out takes its own Tracking tab's:
+
+```php
+'tracking' => [
+    'gtm_id' => [
+        'default' => env('MT_GTM_ID'),
+        'blog' => env('BLOG_GTM_ID'),
+    ],
+],
+```
+
 ## One tool, one place: use Google Tag Manager
 
 With Google Tag Manager set, add GA4, PostHog, Meta and LinkedIn **as tags inside GTM** and leave their IDs empty here. A tool loaded by GTM and by this addon counts every visit twice. The Tracking tab shows a warning as soon as both are set, saving Marketing settings shows a reminder, and Marketing → Overview lists the tools to move.

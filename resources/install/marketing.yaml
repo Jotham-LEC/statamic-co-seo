@@ -9,6 +9,9 @@ tabs:
       -
         fields:
           -
+            handle: site_tracking
+            field: { type: toggle, display: 'marketing-toolkit::fields.brand.site_tracking.display', instructions: 'marketing-toolkit::fields.brand.site_tracking.instructions', default: true }
+          -
             handle: tracking_overlap
             field: { type: section, display: 'marketing-toolkit::fields.brand.tracking_overlap.display', instructions: 'marketing-toolkit::fields.brand.tracking_overlap.instructions', if: 'mtTrackingOverlap' }
           -

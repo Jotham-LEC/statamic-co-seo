@@ -194,7 +194,7 @@ Each switch sets the matching key below to off, whatever `config/marketing-toolk
 
 ## Tracking
 
-Each ID can be set in the **Tracking** tab of Marketing settings (Marketing → Settings), or here, which wins (and shows as "set in .env" on Marketing → Overview). Each key is the field's handle in the Tracking tab, and in `.env` it is `MT_` and the key in capitals. Every `.env` name the addon reads starts with `MT_`; the names up to 0.19, `SEO_…`, are read too until 1.0. See [tracking.md](tracking.md).
+Each ID can be set in the **Tracking** tab of Marketing settings (Marketing → Settings), or here, which wins (and shows as "set in .env" on Marketing → Overview). Each key is the field's handle in the Tracking tab, and in `.env` it is `MT_` and the key in capitals. A key holds one value for every site, or, on a multisite, values keyed by site handle (`['default' => …, 'blog' => …]`), where a site left out takes its own Tracking tab's ([tracking.md](tracking.md#on-a-multisite)). Every `.env` name the addon reads starts with `MT_`; the names up to 0.19, `SEO_…`, are read too until 1.0. See [tracking.md](tracking.md).
 
 | Key | `.env` | |
 |---|---|---|

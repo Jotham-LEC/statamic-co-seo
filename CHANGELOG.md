@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.27.2 – 2026-10-12
+
+### Added
+- **A site of a multisite can turn its tracking tags off.** Each site already had its own Tracking tab, but a site that left an ID empty took its origin's, and on the Eloquent driver an emptied field is saved as no value at all, so a second site couldn't load no tags while the first loaded some. **Tracking tags on this site**, at the top of the Tracking tab, turns them off for one site. Marketing → Overview and the toolbar say when it is off. See [tracking.md](docs/tracking.md#on-a-multisite).
+- **A tracking ID in `config/marketing-toolkit.php` can be set per site.** Each `tracking` key takes values keyed by site handle (`'gtm_id' => ['default' => 'GTM-…', 'blog' => 'GTM-…']`); a site left out takes its own Tracking tab's. A single value still wins on every site.
+
+### Upgrading
+- **Run `composer update` (or `php please updates:run`) to add the toggle to Marketing settings, and commit the blueprint it changes.** It is on, so nothing changes until a site turns it off.
+- **For developers:** `Tracking::onThisSite()` says whether the current site prints its tags, and `Tracking::configured($key)` returns a `tracking` key's value for the current site.
+
 ## 0.27.1 – 2026-10-12
 
 ### Changed

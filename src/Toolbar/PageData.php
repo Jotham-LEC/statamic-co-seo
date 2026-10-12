@@ -447,6 +447,7 @@ final class PageData
 
         $messages = [match (true) {
             ! Features::on('tracking') => __('marketing-toolkit::toolbar.tracking.off'),
+            ! $tracking->onThisSite() => __('marketing-toolkit::toolbar.tracking.off_here'),
             $ids === [] => __('marketing-toolkit::toolbar.tracking.none_set'),
             ! app()->environment((array) config('marketing-toolkit.tracking.environments')) => __('marketing-toolkit::toolbar.tracking.not_production'),
             default => __('marketing-toolkit::toolbar.tracking.printing', ['tools' => $names(array_keys($ids))]),

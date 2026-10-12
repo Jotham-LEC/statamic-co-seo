@@ -149,7 +149,8 @@ defineProps({
                         <span v-if="tool.from_env" class="text-xs text-gray-500 dark:text-gray-400">({{ __('marketing-toolkit::cp.tracking.from_env') }})</span>
                     </li>
                 </ul>
-                <Description>{{ __('marketing-toolkit::cp.tracking.live_only') }} <template v-if="tracking.consent">{{ __('marketing-toolkit::cp.tracking.consent') }}</template></Description>
+                <Description v-if="tracking.off_here">{{ __('marketing-toolkit::cp.tracking.off_here') }}</Description>
+                <Description v-else>{{ __('marketing-toolkit::cp.tracking.live_only') }} <template v-if="tracking.consent">{{ __('marketing-toolkit::cp.tracking.consent') }}</template></Description>
             </template>
             <Button v-if="tracking.url" size="sm" :href="tracking.url" :text="__('marketing-toolkit::cp.tracking.edit')" />
         </Card>

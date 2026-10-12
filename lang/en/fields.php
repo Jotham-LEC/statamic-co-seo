@@ -200,6 +200,10 @@ return [
         'ads_txt' => [
             'display' => 'ads.txt',
         ],
+        'site_tracking' => [
+            'display' => 'Tracking tags on this site',
+            'instructions' => 'Each site has its own tags. A site that hasn’t set its own takes the first site’s, so turn this off for a site that should load none.',
+        ],
         'tracking_overlap' => [
             'display' => 'Move these tags into Google Tag Manager',
             'instructions' => 'Google Tag Manager is set, and so is at least one other tool here. If Tag Manager loads that tool as well, every visit is counted twice, so add each tool as a tag in Tag Manager and then clear its ID here.',

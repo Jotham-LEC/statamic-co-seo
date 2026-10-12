@@ -251,6 +251,7 @@ return [
         ],
         'none' => 'There are no tracking tags yet. You can add Google Tag Manager, Google Analytics, PostHog, the Meta Pixel, or LinkedIn in Settings → Tracking.',
         'live_only' => 'They load on the live site only.',
+        'off_here' => 'They don’t load on this site, because its Tracking tab turns them off.',
         'from_env' => 'set in .env',
         'consent' => 'Consent Mode is on.',
         'overlap_title' => 'Move these tags into Google Tag Manager',

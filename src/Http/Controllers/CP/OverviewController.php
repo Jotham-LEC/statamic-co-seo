@@ -108,7 +108,7 @@ final class OverviewController
     private function tracking(?string $url): array
     {
         // An ID comes from .env when the config holds it, and an ID that a Tracking subclass returns comes from code.
-        $fromEnv = fn (string $tracker, string $id) => strcasecmp(trim((string) config('marketing-toolkit.tracking.'.Tracking::FIELDS[$tracker])), $id) === 0;
+        $fromEnv = fn (string $tracker, string $id) => strcasecmp((string) $this->tracking->configured(Tracking::FIELDS[$tracker]), $id) === 0;
 
         return [
             'tools' => collect($this->tracking->ids())->filter()->map(fn (string $id, string $tracker) => [
@@ -123,6 +123,7 @@ final class OverviewController
                 'where' => $fromEnv($tracker, $value) ? 'MT_'.strtoupper(Tracking::FIELDS[$tracker]) : __('marketing-toolkit::cp.tracking.where_global'),
             ]))->values()->all(),
             'consent' => $this->tracking->consent() !== null,
+            'off_here' => ! $this->tracking->onThisSite(),
             'overlap' => $this->tracking->besideGtm(),
             'url' => $url,
         ];

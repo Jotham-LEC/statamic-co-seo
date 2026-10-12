@@ -5,11 +5,12 @@ namespace JothamLec\MarketingToolkit\Tracking;
 use Illuminate\Support\Facades\Vite;
 use JothamLec\MarketingToolkit\Settings;
 use JothamLec\MarketingToolkit\Support\Features;
+use Statamic\Facades\Site;
 
 /**
  * Provides the tracking tags of the current site and its Consent Mode defaults. The IDs come from
- * the "Tracking" tab of the Marketing settings global, and config/marketing-toolkit.php (and so
- * .env) wins over it. <s:mt:head /> and <s:mt:body /> print them, in production only and never
+ * the "Tracking" tab of the Marketing settings global, each site's own, and config/marketing-toolkit.php
+ * (and so .env) wins over it, for every site or, keyed by site handle, for one. <s:mt:head /> and <s:mt:body /> print them, in production only and never
  * in Live Preview.
  *
  * To change it, override a method in a subclass bound in its place in the container, for
@@ -54,13 +55,41 @@ class Tracking
 
     /**
      * Determines whether the tags print on this request. They print in the environments that
-     * `marketing-toolkit.tracking.environments` lists (production), and never in Live Preview.
+     * `marketing-toolkit.tracking.environments` lists (production), on a site whose Tracking
+     * tab leaves them on, and never in Live Preview.
      */
     public function enabled(): bool
     {
         return Features::on('tracking')
+            && $this->onThisSite()
             && app()->environment((array) config('marketing-toolkit.tracking.environments'))
             && ! request()->isLivePreview();
+    }
+
+    /**
+     * Determines whether the current site prints its tags, which is the Tracking tab's first
+     * toggle. A site that never saved it takes its origin's, so a site of a multisite turns
+     * them off on its own by turning the toggle off in its localization.
+     */
+    public function onThisSite(): bool
+    {
+        return $this->settings->bool('site_tracking', true);
+    }
+
+    /**
+     * Returns a key of `marketing-toolkit.tracking` for the current site. The key holds one
+     * value for every site, or values keyed by site handle (`['default' => 'GTM-…', 'blog' => 'GTM-…']`),
+     * where a site left out has none from the config and takes the Tracking tab's.
+     */
+    public function configured(string $key): ?string
+    {
+        $value = config('marketing-toolkit.tracking.'.$key);
+
+        if (is_array($value)) {
+            $value = $value[Site::current()->handle()] ?? null;
+        }
+
+        return is_scalar($value) && trim((string) $value) !== '' ? trim((string) $value) : null;
     }
 
     /**
@@ -93,7 +122,7 @@ class Tracking
      */
     public function fromConfig(): array
     {
-        return collect(self::FIELDS)->map(fn (string $key) => filled(config('marketing-toolkit.tracking.'.$key)))->all();
+        return collect(self::FIELDS)->map(fn (string $key) => $this->configured($key) !== null)->all();
     }
 
     /**
@@ -104,7 +133,7 @@ class Tracking
     protected function entered(): array
     {
         return collect(self::FIELDS)->map(function (string $key, string $tracker) {
-            $id = trim((string) (config('marketing-toolkit.tracking.'.$key) ?: $this->settings->string($key)));
+            $id = trim((string) ($this->configured($key) ?? $this->settings->string($key)));
 
             return $id === '' ? null : (in_array($tracker, ['gtm', 'ga4'], true) ? strtoupper($id) : $id);
         })->all();
@@ -115,7 +144,7 @@ class Tracking
      */
     public function posthogHost(): string
     {
-        $host = rtrim(trim((string) (config('marketing-toolkit.tracking.posthog_host') ?: $this->settings->string('posthog_host'))), '/');
+        $host = rtrim(trim((string) ($this->configured('posthog_host') ?? $this->settings->string('posthog_host'))), '/');
 
         return preg_match('#^https://[a-z0-9.-]+(:\d+)?$#i', $host) ? $host : 'https://us.i.posthog.com';
     }
@@ -126,7 +155,7 @@ class Tracking
      */
     public function posthogUiHost(): ?string
     {
-        $host = rtrim(trim((string) (config('marketing-toolkit.tracking.posthog_ui_host') ?: $this->settings->string('posthog_ui_host'))), '/');
+        $host = rtrim(trim((string) ($this->configured('posthog_ui_host') ?? $this->settings->string('posthog_ui_host'))), '/');
 
         if (preg_match('#^https://[a-z0-9.-]+(:\d+)?$#i', $host)) {
             return $host;
