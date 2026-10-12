@@ -6,6 +6,7 @@ use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Support\Facades\Queue;
+use JothamLec\MarketingToolkit\Boost\Boost;
 use JothamLec\MarketingToolkit\Conversions\Attribution;
 use JothamLec\MarketingToolkit\Cp\Navigation;
 use JothamLec\MarketingToolkit\Http\Middleware\HandleMissing;
@@ -160,6 +161,9 @@ class ServiceProvider extends AddonServiceProvider
         }));
 
         Navigation::register();
+
+        // With Laravel Boost installed, the addon's read-only tools join Boost's MCP server.
+        Boost::register();
 
         // These values are worked out when the control panel renders, which has the CP routes,
         // and a front-end request never asks for them.

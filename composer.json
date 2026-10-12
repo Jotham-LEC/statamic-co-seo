@@ -22,13 +22,15 @@
     },
     "suggest": {
         "ext-gd": "Draws favicons when Imagick isn't installed",
-        "ext-imagick": "Draws the share cards and favicons"
+        "ext-imagick": "Draws the share cards and favicons",
+        "laravel/boost": "Gives AI coding agents the addon's guidelines, skills and read-only MCP tools"
     },
     "replace": {
         "jotham-lec/statamic-co-seo": "self.version"
     },
     "require-dev": {
         "larastan/larastan": "^3.0",
+        "laravel/boost": "^2.10",
         "laravel/pint": "^1.20",
         "orchestra/testbench": "^10.8|^11.0",
         "pestphp/pest": "^4.0"

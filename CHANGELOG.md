@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.27.0 – 2026-10-12
+
+### Added
+- **Ready for AI coding agents, through Laravel Boost.** With Laravel Boost installed, `php artisan boost:install` offers the addon's guidelines (how it fits a site, and what not to hand-write) and two skills: `marketing-toolkit-seo-rules` and `marketing-toolkit-extend`. Three read-only tools join Boost's MCP server: `marketing-toolkit-page-seo` (what a page's `<head>` prints), `marketing-toolkit-report` (the latest SEO report's failing checks) and `marketing-toolkit-redirect` (which redirect answers a path). Without Boost, nothing changes. See [configuration.md](docs/configuration.md#laravel-boost).
+
+### Upgrading
+- **Nothing to do.** To use it, `composer require laravel/boost --dev` and run `php artisan boost:install`; set `marketing-toolkit.boost.tools` to `false` to leave the tools out.
+
 ## 0.26.0 – 2026-10-12
 
 ### Added

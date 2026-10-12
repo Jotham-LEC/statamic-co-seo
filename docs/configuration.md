@@ -288,6 +288,20 @@ The front-end toolbar shows for anyone with `access cp`, and each of its panels 
 | `php please mt:search-console [--site=]` | Imports the last period's numbers from Google Search Console. With several sites, each site that has a property, or only `--site`. |
 | `php please mt:report [--site=]` | Runs a whole report in the terminal and prints the scores. Continues a report that's already running. With several sites, one report per site in turn, or only `--site`; the schedule runs one per site. |
 
+## Laravel Boost
+
+For AI coding agents. With [Laravel Boost](https://github.com/laravel/boost) installed (`composer require laravel/boost --dev`), `php artisan boost:install` lists the addon among the packages with guidelines and skills:
+
+- **Guidelines** (`resources/boost/guidelines/core.blade.php`): how the addon fits a site, and what not to hand-write (meta tags, JSON-LD, sitemaps, redirect routes, tracking scripts).
+- **Skills**: `marketing-toolkit-seo-rules` (pointing the addon at a collection's fields) and `marketing-toolkit-extend` (a `SiteSeo` subclass, a share-card template).
+- **MCP tools**, added to Boost's own MCP server beside its tools: `marketing-toolkit-page-seo` (a page's title, description, canonical, robots, share image, alternates, JSON-LD types and sitemap status), `marketing-toolkit-report` (the latest SEO report's score and failing checks) and `marketing-toolkit-redirect` (which redirect answers a path). They only read.
+
+| Key | Default | |
+|---|---|---|
+| `boost.tools` | `true` | Adds the MCP tools to Boost's server (through `boost.mcp.tools.include`). Set to `false` to leave them out; Boost's own `boost.mcp.tools.exclude` works too. |
+
+Nothing here runs without Boost, and nothing is sent anywhere: the tools answer the agent from the site's own data.
+
 ## What it sends where
 
 The addon sends nothing to its author: no licence check, no usage numbers, no updates check. The server or the visitor's browser talks to another service only for a feature that is on and set up:

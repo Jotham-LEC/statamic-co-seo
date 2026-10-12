@@ -134,6 +134,24 @@ return [
         'enabled' => true,
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Laravel Boost
+    |--------------------------------------------------------------------------
+    |
+    | For AI coding agents. With Laravel Boost installed, `php artisan
+    | boost:install` offers the addon's guidelines and skills, and its
+    | read-only tools join Boost's MCP server: marketing-toolkit-page-seo (what
+    | a page's <head> prints), marketing-toolkit-report (the latest SEO report)
+    | and marketing-toolkit-redirect (which redirect answers a path). Set
+    | `tools` to false to leave them out.
+    |
+    */
+
+    'boost' => [
+        'tools' => true,
+    ],
+
     // /llms.txt lists the site's pages as Markdown for AI assistants (llmstxt.org).
     'llms_txt' => [
         'enabled' => true,

@@ -22,6 +22,7 @@ SEO, redirects, 404s, SEO reports, tracking tags and Consent Mode for Statamic. 
 - **Statamic native**: Fieldsets, globals, forms, and tags. Your layout needs only two tags, `<s:mt:head />` and `<s:mt:body />`.
 - **Lean**: No front-end script unless a feature needs one. Files are served without sessions or cookies.
 - **Feature toggles**: Switch off what you don't use, and it isn't loaded at all.
+- **Ready for AI coding agents**: With [Laravel Boost](https://github.com/laravel/boost) installed, `php artisan boost:install` offers the addon's guidelines and skills, and three read-only tools join Boost's MCP server: a page's SEO as its `<head>` prints it, the latest SEO report, and which redirect answers a path.
 
 How it works under the hood is in [For developers](https://github.com/Jotham-LEC/statamic-marketing-toolkit/blob/main/docs/developers.md).
 
