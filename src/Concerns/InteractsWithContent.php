@@ -19,6 +19,8 @@ use Statamic\Facades\Image;
 use Statamic\Facades\Markdown;
 use Statamic\Facades\Site;
 use Statamic\Fields\Value;
+use Statamic\Fieldtypes\Bard;
+use Statamic\Fieldtypes\Bard\Augmentor;
 
 /**
  * This trait holds the helpers the rules share. They read the settings, the
@@ -89,7 +91,7 @@ trait InteractsWithContent
 
     /**
      * Returns the entry's `description`, or a field the collection names, or
-     * else the first paragraph of its `content`.
+     * else the first paragraph of its `content`. A field may be text or Bard.
      */
     protected function contentDescription(Context $context): ?string
     {
@@ -100,7 +102,7 @@ trait InteractsWithContent
         }
 
         foreach (['description', ...$this->contentConfig($context, 'description_fields', [])] as $field) {
-            if ($value = $this->rawValues($content, $field)->first(fn ($value) => filled($value) && is_string($value))) {
+            if ($value = $this->rawValues($content, $field)->map(fn ($value) => $this->fieldText($value))->first(fn ($value) => $value !== null)) {
                 return $value;
             }
         }
@@ -117,6 +119,33 @@ trait InteractsWithContent
         }
 
         return Text::firstParagraph($html);
+    }
+
+    /**
+     * Returns a stored field value as text, or null when it has none: a string
+     * as it is, and a Bard field's nodes (block or inline, as Bard stores them
+     * unless it saves HTML) rendered as Bard renders them, without its sets,
+     * then as plain text with a space where one block ends and the next begins.
+     */
+    protected function fieldText(mixed $value): ?string
+    {
+        if (is_string($value)) {
+            return filled($value) ? $value : null;
+        }
+
+        if (! is_array($value) || ! array_is_list($value)) {
+            return null;
+        }
+
+        $nodes = array_values(array_filter($value, fn ($node) => is_array($node) && is_string($node['type'] ?? null) && $node['type'] !== 'set'));
+        if ($nodes === []) {
+            return null;
+        }
+
+        $html = (string) (new Augmentor(new Bard))->convertToHtml($nodes);
+        $text = Text::plain(preg_replace('#<br\s*/?>|</(?:p|h[1-6]|li|blockquote|pre|td|th)>#i', '$0 ', $html));
+
+        return $text === '' ? null : $text;
     }
 
     /**

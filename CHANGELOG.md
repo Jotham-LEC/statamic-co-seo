@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- **A Bard field in `title_fields` or `description_fields` is read.** Only text fields were: a Bard field (Bard stores its content as nodes, not text) was passed over, so a page builder whose hero text or introductions are Bard fell back to the site's default description. Its text is now read as plain text, inline Bard or not, with a space between paragraphs and its sets left out. See [configuration.md](docs/configuration.md#fields-in-a-page-builder).
+
+### Upgrading
+- **A page whose description field is Bard gets its own description in place of the site's default.** Check search results and share previews of such pages after updating.
+
 ## 0.25.0 – 2026-10-08
 
 Generated share cards carry the brand, a logo or the name, and come in the three shapes Google asks for an article's images.

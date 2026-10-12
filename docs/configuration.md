@@ -39,8 +39,8 @@ These two shape what the site prints. The report's title and description checks,
         'og_type' => 'article',            // og:type (default 'website')
         'schema' => 'Article',             // adds an Article, NewsArticle or BlogPosting node
         'page_schema' => 'WebPage',        // the WebPage node's type (CollectionPage, ProfilePage: about the entry, as a Person)
-        'title_fields' => ['seo_title'],   // tried before the title for <title> and og:title (the site name still added)
-        'description_fields' => ['intro'], // tried before the body's first paragraph
+        'title_fields' => ['seo_title'],   // tried before the title for <title> and og:title (the site name still added); text or Bard
+        'description_fields' => ['intro'], // tried before the body's first paragraph; text or Bard (read as plain text)
         'image_fields' => ['hero'],        // tried before the generated card
         'faq_field' => 'faqs',             // a grid of question / answer rows (answer: Markdown, text or Bard) → FAQPage (valid markup; Google shows no FAQ results since 2026)
         'author_field' => 'authors',       // an entries or users field → the Article's authors (else the publisher)
@@ -58,6 +58,8 @@ These two shape what the site prints. The report's title and description checks,
 #### Fields in a page builder
 
 `title_fields`, `description_fields`, `image_fields` and `faq_field` can name a field inside a Replicator's sets as `replicator.set.field`: the Replicator's handle, the set's type (`*` for any) and the field in the set. Statamic handles have no dots, so a plain name means what it always did.
+
+A title or description field can be a text field or a Bard field, inline or not: Bard's text is read as plain text (its bold, italics and links dropped, a space between paragraphs, its sets left out).
 
 ```php
 'pages' => [

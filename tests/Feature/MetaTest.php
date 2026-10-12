@@ -273,6 +273,27 @@ describe('fields in a Replicator\'s sets', function () {
         ]]))->description)->toBe('Shown lead.');
     });
 
+    test('a description field may be Bard, block or inline, read as plain text', function () {
+        config(['marketing-toolkit.collections.pages.description_fields' => ['sections.hero.lead', 'intro']]);
+        $inline = [['type' => 'text', 'text' => 'Baskets '], ['type' => 'text', 'marks' => [['type' => 'bold']], 'text' => 'made by hand'], ['type' => 'text', 'text' => ' & delivered.']];
+        $blocks = [
+            ['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'First.']]],
+            ['type' => 'set', 'attrs' => ['values' => ['type' => 'image', 'image' => 'a.png']]],
+            ['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'Second,'], ['type' => 'hardBreak'], ['type' => 'text', 'text' => 'on a new line.']]],
+        ];
+
+        expect(metaFor(entryIn('pages', 'inline', ['sections' => [['type' => 'hero', 'lead' => $inline]]]))->description)->toBe('Baskets made by hand & delivered.')
+            ->and(metaFor(entryIn('pages', 'blocks', ['intro' => $blocks]))->description)->toBe('First. Second, on a new line.')
+            // An empty Bard field, or one holding only a set, counts as not set.
+            ->and(metaFor(entryIn('pages', 'empty', ['intro' => [['type' => 'set', 'attrs' => ['values' => ['type' => 'image']]]], 'description' => 'Own.']))->description)->toBe('Own.');
+    });
+
+    test('a title field may be Bard, read as plain text', function () {
+        config(['marketing-toolkit.collections.pages.title_fields' => ['heading']]);
+
+        expect(metaFor(entryIn('pages', 'titled', ['heading' => [['type' => 'text', 'text' => 'Slow '], ['type' => 'text', 'marks' => [['type' => 'italic']], 'text' => 'gifting']]]))->ogTitle)->toBe('Slow gifting');
+    });
+
     test('no visible set, or none of that type, gives nothing', function () {
         config(['marketing-toolkit.collections.pages' => ['image_fields' => ['sections.hero.image'], 'faq_field' => 'sections.faq.faqs']]);
         $meta = metaFor(entryIn('pages', 'empty', ['sections' => [['type' => 'hero', 'enabled' => false, 'image' => 'hidden.png']]]));

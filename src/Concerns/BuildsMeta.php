@@ -94,15 +94,16 @@ trait BuildsMeta
      * Returns the page's title from a field that the collection (or taxonomy)
      * names in `title_fields`, ahead of its own title, for example the
      * `meta_title` or `seo_title` a site kept from another SEO addon. The first
-     * field that has text wins, and a name with dots is a field in a
-     * Replicator's sets, as it is for description_fields.
+     * field that has text wins (a text or a Bard field, read as plain text),
+     * and a name with dots is a field in a Replicator's sets, as it is for
+     * description_fields.
      */
     protected function fieldTitle(Context $context): ?string
     {
         $content = $context->content();
 
         foreach ($content ? $this->contentConfig($context, 'title_fields', []) : [] as $field) {
-            if ($value = $this->rawValues($content, $field)->first(fn ($value) => is_string($value) && filled($value))) {
+            if ($value = $this->rawValues($content, $field)->map(fn ($value) => is_array($value) ? $this->fieldText($value) : $value)->first(fn ($value) => is_string($value) && filled($value))) {
                 return trim($value);
             }
         }
