@@ -4,7 +4,7 @@
 ![The Marketing overview, with the SEO score, the failing checks, recent 404s, redirects, and the brand](https://raw.githubusercontent.com/Jotham-LEC/statamic-marketing-toolkit/main/docs/images/overview.png)
 
 
-SEO, redirects, 404s, SEO reports, tracking tags and Consent Mode for Statamic. Built for teams where marketing has ownership over SEO & Analytics, so that designers/developers can focus on app logic and design. 
+SEO, redirects, 404s, SEO reports, tracking tags and Consent Mode for Statamic. Built for teams where marketing has ownership over SEO & Analytics, so that designers/developers can focus on app logic and design. A Laravel Boost extension gives AI coding agents the same knowledge.
 
 ## For marketers
 
@@ -22,9 +22,24 @@ SEO, redirects, 404s, SEO reports, tracking tags and Consent Mode for Statamic. 
 - **Statamic native**: Fieldsets, globals, forms, and tags. Your layout needs only two tags, `<s:mt:head />` and `<s:mt:body />`.
 - **Lean**: No front-end script unless a feature needs one. Files are served without sessions or cookies.
 - **Feature toggles**: Switch off what you don't use, and it isn't loaded at all.
-- **Ready for AI coding agents**: With [Laravel Boost](https://github.com/laravel/boost) installed, `php artisan boost:install` offers the addon's guidelines and skills, and three read-only tools join Boost's MCP server: a page's SEO as its `<head>` prints it, the latest SEO report, and which redirect answers a path.
+- **Ready for AI coding agents**: A Laravel Boost extension; see below.
 
 How it works under the hood is in [For developers](https://github.com/Jotham-LEC/statamic-marketing-toolkit/blob/main/docs/developers.md).
+
+## For AI coding agents: a Laravel Boost extension
+
+The addon extends [Laravel Boost](https://github.com/laravel/boost), Laravel's official AI toolkit, so that Claude Code, Cursor, Codex and other agents work with it rather than around it. Install Boost (`composer require laravel/boost --dev`) and run `php artisan boost:install`: the addon is listed among the packages with guidelines and skills.
+
+- **Guidelines**: how the addon fits a site, and what an agent must not hand-write: meta tags, JSON-LD, sitemaps, redirect routes, tracking scripts.
+- **Skills**:
+  - `marketing-toolkit-seo-rules`: point the addon at a collection's own fields, page builders included;
+  - `marketing-toolkit-extend`: change a rule in a `SiteSeo` subclass, or add a share-card design.
+- **MCP tools**, added to Boost's own MCP server, read-only:
+  - `marketing-toolkit-page-seo`: what a page's `<head>` prints;
+  - `marketing-toolkit-report`: the latest SEO report's failing checks;
+  - `marketing-toolkit-redirect`: which redirect answers a path.
+
+Every name starts with `marketing-toolkit-`, beside Boost's and Statamic's own and never in their place. Without Boost nothing changes, and nothing leaves the site. Details are in [configuration.md](https://github.com/Jotham-LEC/statamic-marketing-toolkit/blob/main/docs/configuration.md#laravel-boost).
 
 ## Screens
 
@@ -45,6 +60,7 @@ The preview updates as you type, for Google and for shares on Facebook, LinkedIn
 - **A serializing cache store**: `file`, `redis`, `database`, or `memcached`, not `array`. Automatic redirects compare an entry with the copy loaded before it was edited.
 - **`imagick`** for share cards and favicons. Without it, pages use their uploaded share image, and `gd` draws favicons from a PNG or JPEG.
 - **Laravel's scheduler** for scheduled reports and the Search Console import. A queue worker is optional.
+- Optional: **Laravel Boost** 2.10+ for the guidelines, skills and tools for AI coding agents.
 
 Details are in [Getting started](https://github.com/Jotham-LEC/statamic-marketing-toolkit/blob/main/docs/getting-started.md#what-you-need).
 

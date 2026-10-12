@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.27.1 – 2026-10-12
+
+### Changed
+- **The README describes the Laravel Boost extension in a section of its own**, with its guidelines, skills and tools. No code changed.
+
 ## 0.27.0 – 2026-10-12
 
 ### Added
