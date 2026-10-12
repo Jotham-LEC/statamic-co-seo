@@ -25,7 +25,7 @@ final class MetaPayload
     public function forContent(Entry|Term $content): array
     {
         $meta = $this->seo->meta(self::context($content));
-        $generated = $content instanceof Entry ? $this->seo->generatedImageUrl($content) : null;
+        $generated = $content instanceof Entry ? $this->seo->generatedImageUrl($content) : $this->seo->generatedTermImageUrl($content);
 
         return [
             'title' => $meta->title,

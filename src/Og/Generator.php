@@ -9,14 +9,16 @@ use JothamLec\MarketingToolkit\Context;
 use JothamLec\MarketingToolkit\SiteSeo;
 use JothamLec\MarketingToolkit\Support\Sites;
 use Statamic\Contracts\Entries\Entry;
+use Statamic\Contracts\Taxonomies\Term;
 
 /**
  * Draws an entry's share card in one of its shapes and caches the PNG until the entry, the
- * card's colours, its logo or the template's version change.
+ * card's colours, its logo or the template's version change. A taxonomy term's card is drawn
+ * the same way, by the term… methods.
  *
- * The card shows the entry's SEO "Card title" and "Card subtitle" if they are set, or else its
- * title and the same description its meta tags carry. The template is the collection's
- * `og_template`, or else `default`.
+ * The card shows the page's SEO "Card title" and "Card subtitle" if they are set, or else its
+ * title and the same description its meta tags carry. The template is the collection's (for a
+ * term, the taxonomy's) `og_template`, or else `default`.
  */
 class Generator
 {
@@ -37,16 +39,29 @@ class Generator
      */
     public function png(Entry $entry, Shape $shape = Shape::Landscape): string
     {
-        $card = $this->card($entry, $shape);
         $template = $this->template($entry);
+        throw_unless($this->draws($entry, $shape), InvalidArgumentException::class, sprintf("The share-card template [%s] doesn't draw the [%s] shape.", $template::class, $shape->name));
 
-        if (! $this->draws($entry, $shape)) {
-            throw new InvalidArgumentException(sprintf("The share-card template [%s] doesn't draw the [%s] shape.", $template::class, $shape->name));
-        }
+        return $this->cachedPng($entry, $this->card($entry, $shape), $template, $shape);
+    }
 
+    /**
+     * Returns a taxonomy term's card as a PNG, as png() does for an entry.
+     */
+    public function termPng(Term $term, Shape $shape = Shape::Landscape): string
+    {
+        $template = $this->termTemplate($term);
+        throw_unless($this->termDraws($term, $shape), InvalidArgumentException::class, sprintf("The share-card template [%s] doesn't draw the [%s] shape.", $template::class, $shape->name));
+
+        return $this->cachedPng($term, $this->termCard($term, $shape), $template, $shape);
+    }
+
+    private function cachedPng(Entry|Term $entry, Card $card, Template $template, Shape $shape): string
+    {
         $key = implode(':', [
             'mt:og',
-            $entry->id(),
+            // A term's id is the same on every site; its card differs per site.
+            $entry instanceof Term ? $entry->id().'@'.$entry->locale() : $entry->id(),
             $entry->lastModified()->timestamp,
             $template::class,
             $template->version(),
@@ -81,6 +96,22 @@ class Generator
     }
 
     /**
+     * Draws a term's card without the cache, as draw() does for an entry.
+     */
+    public function termDraw(Term $term, Shape $shape = Shape::Landscape): string
+    {
+        return $this->termTemplate($term)->image($this->termCard($term, $shape))->toString();
+    }
+
+    /**
+     * Determines whether the term's template draws the shape.
+     */
+    public function termDraws(Term $term, Shape $shape): bool
+    {
+        return in_array($shape, $this->termTemplate($term)->shapes(), true);
+    }
+
+    /**
      * Works out what the card says with the entry's site as the current one (for its brand values
      * and colours), wherever it is asked for.
      */
@@ -89,22 +120,36 @@ class Generator
         return Sites::as($entry->locale(), fn () => $this->cardInSite($entry, $shape));
     }
 
-    private function cardInSite(Entry $entry, Shape $shape): Card
+    /**
+     * Works out what a term's card says: its title and description, labelled with its taxonomy.
+     */
+    public function termCard(Term $term, Shape $shape = Shape::Landscape): Card
+    {
+        return Sites::as($term->locale(), fn () => $this->cardInSite($term, $shape));
+    }
+
+    private function cardInSite(Entry|Term $entry, Shape $shape): Card
     {
         $seo = app(SiteSeo::class);
         $context = Context::make($entry);
         $settings = $seo->settings();
         $brand = app(Brand::class, ['settings' => $settings]);
         $overrides = $context->seo();
-        // This is the mount page as it is on the entry's site, where it has its own title.
-        $mount = $entry->collection()->mount();
+        // This is the mount page as it is on the entry's site, where it has its own title. A
+        // term's card is labelled with its taxonomy.
+        $mount = $entry instanceof Entry ? $entry->collection()->mount() : null;
         $mount = $mount?->in($entry->locale()) ?? $mount;
+        $label = match (true) {
+            $entry instanceof Term => (string) $entry->taxonomy()->title(),
+            $mount !== null => (string) $mount->value('title'),
+            default => $settings->siteName(),
+        };
 
         return new Card(
-            title: $overrides['og_title'] ?? (string) $context->value('title'),
+            title: $overrides['og_title'] ?? (string) ($entry instanceof Term ? ($entry->value('title') ?? $entry->slug()) : $context->value('title')),
             // A long subtitle may be typed on several lines, but the card draws it as one paragraph.
             description: isset($overrides['og_subtitle']) ? Str::squish((string) $overrides['og_subtitle']) : $seo->description($context),
-            label: $mount ? (string) $mount->value('title') : $settings->siteName(),
+            label: $label,
             siteName: $settings->siteName(),
             picture: $settings->asset('og_picture')?->resolvedPath(),
             background: $settings->string('og_background', '#ffffff'),
@@ -118,7 +163,20 @@ class Generator
 
     public function template(Entry $entry): Template
     {
-        $key = config("marketing-toolkit.collections.{$entry->collectionHandle()}.og_template") ?? 'default';
+        return $this->templateFor(config("marketing-toolkit.collections.{$entry->collectionHandle()}.og_template"));
+    }
+
+    /**
+     * Returns the term's template: its taxonomy's `og_template`, or else the default.
+     */
+    public function termTemplate(Term $term): Template
+    {
+        return $this->templateFor(config("marketing-toolkit.taxonomies.{$term->taxonomyHandle()}.og_template"));
+    }
+
+    private function templateFor(?string $key): Template
+    {
+        $key ??= 'default';
 
         // A key that names no template falls back to the default rather than
         // breaking the image, and a missing default is a setup error.

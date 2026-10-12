@@ -1,13 +1,18 @@
 <?php
 
+use Illuminate\Http\Request;
+use JothamLec\MarketingToolkit\Context;
 use JothamLec\MarketingToolkit\Og\Card;
 use JothamLec\MarketingToolkit\Og\DefaultTemplate;
 use JothamLec\MarketingToolkit\Og\Generator;
 use JothamLec\MarketingToolkit\Og\Template;
+use JothamLec\MarketingToolkit\SiteSeo;
 use SimonHamp\TheOg\Image;
 use Statamic\Facades\AssetContainer;
 use Statamic\Facades\Blueprint;
 use Statamic\Facades\GlobalSet;
+use Statamic\Facades\Taxonomy;
+use Statamic\Facades\Term;
 
 beforeEach(fn () => seoGlobal(['og_background' => '#282828', 'og_text' => '#fbf1c7', 'og_accent' => '#fad03a']));
 
@@ -151,4 +156,38 @@ test('without Imagick no page points at a card: the default image stands in, and
 
     expect(metaFor(entryIn('pages', 'about'), '/about')->image['url'])->toStartWith('https://example.test/img/asset/YXNzZXRzL2JyYW5k');
     $this->get('/og/about.png')->assertNotFound();
+});
+
+describe('term pages', function () {
+    beforeEach(fn () => Taxonomy::make('topics')->title('Topics')->save());
+
+    $term = fn () => tap(Term::make()->taxonomy('topics')->slug('gardens')->data(['title' => 'Gardens', 'description' => 'Everything that grows.']))->save()->in('default');
+
+    test('a term page points at its own card, as an entry does', function () use ($term) {
+        $meta = app(SiteSeo::class)->meta(Context::make($term(), Request::create('https://example.test/topics/gardens')));
+
+        expect($meta->image['url'])->toStartWith('https://example.test/og/topics/gardens.png?v=')
+            ->and($meta->image['alt'])->toBe('Gardens');
+    })->skip(! extension_loaded('imagick'), 'Share cards need PHP\'s imagick extension.');
+
+    test('a term\'s card says its title and description, labelled with its taxonomy', function () use ($term) {
+        $card = app(Generator::class)->termCard($term());
+
+        expect([$card->title, $card->description, $card->label])->toBe(['Gardens', 'Everything that grows.', 'Topics']);
+    });
+
+    test('a term\'s card is served at its address, in every shape', function () use ($term) {
+        $term();
+
+        foreach (['/og/topics/gardens.png', '/og/topics/gardens.1x1.png', '/og/topics/gardens.4x3.png'] as $url) {
+            $this->get($url)->assertOk()->assertHeader('Content-Type', 'image/png');
+        }
+        $this->get('/og/topics/nothing.png')->assertNotFound();
+    })->skip(! extension_loaded('imagick'), 'Share cards need PHP\'s imagick extension.');
+
+    test('the template comes from the taxonomy, else the default', function () use ($term) {
+        config(['marketing-toolkit.og.templates.quiet' => QuietTemplate::class, 'marketing-toolkit.taxonomies.topics.og_template' => 'quiet']);
+
+        expect(app(Generator::class)->termTemplate($term()))->toBeInstanceOf(QuietTemplate::class);
+    });
 });

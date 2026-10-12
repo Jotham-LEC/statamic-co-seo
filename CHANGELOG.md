@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.26.0 – 2026-10-12
+
+### Added
+- **Taxonomy term pages get a generated share card.** A category or tag page without an uploaded share image pointed at no image at all (or at Brand's default image, when one was set); it now gets its own card, with its title and description, labelled with the taxonomy's name, at its address (`/og/topics/gardens.png`, in all three shapes). A taxonomy can choose its card's design with `og_template`, as a collection does. The SEO tab's preview and the control panel's card preview show it too. See [configuration.md](docs/configuration.md#taxonomies).
+
+### Upgrading
+- **Term pages without a share image now have an `og:image`.** Nothing to do; check how a category page looks when shared.
+- **For developers:** `SiteSeo::generatedTermImageUrl(Term)` gives a term's card address, and `Og\Generator` draws terms with `termPng()`, `termDraw()`, `termDraws()`, `termCard()` and `termTemplate()`. The entry methods are unchanged, so subclasses that override them keep working.
+
 ## 0.25.1 – 2026-10-12
 
 ### Fixed

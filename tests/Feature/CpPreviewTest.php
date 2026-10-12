@@ -101,12 +101,20 @@ test('a term is previewed too', function () {
     $this->actingAs(cpUser(super: true));
     $term = tap(Term::make()->taxonomy('topics')->slug('gardens')->data(['title' => 'Gardens']))->save();
 
-    previewOf('taxonomies.topics.topic', ['title' => 'Gardens and parks', 'slug' => 'gardens'], $term->in('default')->reference())
+    $saved = previewOf('taxonomies.topics.topic', ['title' => 'Gardens and parks', 'slug' => 'gardens'], $term->in('default')->reference())
         ->assertOk()
-        ->assertJson(['title' => 'Gardens and parks', 'url' => 'https://example.test/topics/gardens', 'image' => null]);
+        ->assertJson(['title' => 'Gardens and parks', 'url' => 'https://example.test/topics/gardens']);
+    // A saved term has its generated card, as an entry does, where cards can be drawn.
+    if (extension_loaded('imagick')) {
+        expect($saved->json('image.url'))->toStartWith('https://example.test/og/topics/gardens.png?v=');
+    } else {
+        expect($saved->json('image'))->toBeNull();
+    }
 
+    // A term being created has no card yet.
     previewOf('taxonomies.topics.topic', ['title' => 'Ponds', 'slug' => 'ponds'])
-        ->assertJson(['title' => 'Ponds', 'url' => 'https://example.test/topics/ponds']);
+        ->assertOk()
+        ->assertJson(['title' => 'Ponds', 'url' => 'https://example.test/topics/ponds', 'image' => null]);
 });
 
 test('the card is drawn from the form as a PNG and never cached', function () {
@@ -124,10 +132,16 @@ test('the card is drawn from the form as a PNG and never cached', function () {
         ->and(collect($cached)->keys()->filter(fn ($key) => str_contains($key, 'mt:og')))->toBeEmpty();
 })->skip(! extension_loaded('imagick'), 'Share cards need PHP\'s imagick extension.');
 
-test('the card route has nothing to draw for a term or with cards off', function () {
+test('the card route draws a term\'s card too', function () {
     $this->actingAs(cpUser(super: true));
 
-    previewOf('taxonomies.topics.topic', ['title' => 'Ponds', 'slug' => 'ponds'], route: 'mt.preview.card')->assertNotFound();
+    previewOf('taxonomies.topics.topic', ['title' => 'Ponds', 'slug' => 'ponds'], route: 'mt.preview.card')
+        ->assertOk()
+        ->assertHeader('Content-Type', 'image/png');
+})->skip(! extension_loaded('imagick'), 'Share cards need PHP\'s imagick extension.');
+
+test('the card route has nothing to draw with cards off', function () {
+    $this->actingAs(cpUser(super: true));
 
     config(['marketing-toolkit.og.enabled' => false]);
 

@@ -11,6 +11,7 @@ use JothamLec\MarketingToolkit\Preview\MetaPayload;
 use JothamLec\MarketingToolkit\Support\Features;
 use JothamLec\MarketingToolkit\Support\Sites;
 use Statamic\Contracts\Entries\Entry;
+use Statamic\Contracts\Taxonomies\Term;
 
 /**
  * Feeds the `mt_preview` fieldtype. Both actions read the publish form's
@@ -29,16 +30,16 @@ final class PreviewController
 
     /**
      * Returns the generated card for the form as it stands. It is drawn every time
-     * and never cached, because each draft differs and only saved entries go public.
+     * and never cached, because each draft differs and only saved pages go public.
      */
     public function card(Request $request, Generator $generator): Response
     {
         $content = Draft::fromRequest($request);
 
-        abort_unless($content instanceof Entry && Features::on('share_cards') && $generator->available(), 404);
+        abort_unless(Features::on('share_cards') && $generator->available(), 404);
 
-        // The card() method works the card out on the entry's site, as the public card's route does.
-        $png = $generator->template($content)->image($generator->card($content))->toString();
+        // The card methods work the card out on the page's site, as the public card's route does.
+        $png = $content instanceof Term ? $generator->termDraw($content) : $generator->template($content)->image($generator->card($content))->toString();
 
         return new Response($png, 200, [
             'Content-Type' => 'image/png',

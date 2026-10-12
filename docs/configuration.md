@@ -73,7 +73,7 @@ A set switched off in the control panel isn't on the page, so it counts for noth
 
 ### Taxonomies
 
-`taxonomies` gives a taxonomy's term pages the same rules, by taxonomy handle: `og_type`, `page_schema`, `title_fields`, `description_fields`, `image_fields` and `faq_field`. A term has none of its collections' rules.
+`taxonomies` gives a taxonomy's term pages the same rules, by taxonomy handle: `og_type`, `page_schema`, `title_fields`, `description_fields`, `image_fields`, `faq_field` and `og_template`. A term has none of its collections' rules. A term page without an uploaded share image gets a generated card, as an entry does: its title and description, labelled with the taxonomy's name, at `/og/{uri}.png` (`/og/topics/gardens.png`).
 
 ```php
 'taxonomies' => [
@@ -165,7 +165,7 @@ Setting it up:
 
 | Key | Default | |
 |---|---|---|
-| `og.enabled` | `true` | Generated cards at `/og.png` (home) and `/og/{uri}.png`. |
+| `og.enabled` | `true` | Generated cards at `/og.png` (home) and `/og/{uri}.png`, for entries and taxonomy term pages. |
 | `og.templates` | `['default' => DefaultTemplate::class]` | Card designs by key; see [developers.md](developers.md#add-a-share-card-template). |
 | `og.logo_position` | `'top'` | Where the default card puts the brand: `'top'` or `'bottom'` (left-aligned either way). |
 | `og.max_age` | 30 days | `Cache-Control` max-age of the card images. |

@@ -12,6 +12,7 @@ use JothamLec\MarketingToolkit\Support\Fields;
 use JothamLec\MarketingToolkit\Support\Text;
 use Statamic\Contracts\Assets\Asset;
 use Statamic\Contracts\Entries\Entry;
+use Statamic\Contracts\Taxonomies\Term;
 
 /**
  * This trait builds the page's meta tags, which are the title, description,
@@ -147,7 +148,14 @@ trait BuildsMeta
             }
 
             // The card shows the page's title, so its alt text gives that title to someone who can't see it.
-            if ($context->entry && $context->status < 400 && $url = $this->generatedImageUrl($context->entry)) {
+            $content = $context->content();
+            $url = match (true) {
+                $context->status >= 400 => null,
+                $content instanceof Entry => $this->generatedImageUrl($content),
+                $content instanceof Term => $this->generatedTermImageUrl($content),
+                default => null,
+            };
+            if ($url) {
                 return ['url' => $url, 'width' => $this->imageWidth(), 'height' => $this->imageHeight(), 'alt' => $context->seo()['og_title'] ?? $this->contentTitle($context)];
             }
 
@@ -193,14 +201,17 @@ trait BuildsMeta
      */
     public function generatedImageUrl(Entry $entry): ?string
     {
-        $previewed = Fields::isPreviewed($entry);
+        return $this->shareCardUrl($entry);
+    }
 
-        if (! Features::on('share_cards') || (! $previewed && $entry->status() !== 'published') || ! $entry->url() || $this->isProtected($entry)
-            || ! app(Generator::class)->available()) {
-            return null;
-        }
-
-        return $this->cardUrl($entry, Shape::Landscape);
+    /**
+     * Returns the URL of a taxonomy term's generated card, as
+     * generatedImageUrl() does for an entry: /og/topics/gardens.png for the
+     * term page /topics/gardens.
+     */
+    public function generatedTermImageUrl(Term $term): ?string
+    {
+        return $this->shareCardUrl($term);
     }
 
     /**
@@ -210,12 +221,34 @@ trait BuildsMeta
      */
     public function cardUrl(Entry $entry, Shape $shape): string
     {
-        $absolute = (string) $entry->absoluteUrl();
+        return $this->cardAddress($entry, $shape);
+    }
+
+    private function shareCardUrl(Entry|Term $content): ?string
+    {
+        $previewed = Fields::isPreviewed($content);
+
+        if (! Features::on('share_cards') || (! $previewed && $content->status() !== 'published') || ! $content->url() || $this->isProtected($content)
+            || ! app(Generator::class)->available()) {
+            return null;
+        }
+
+        // A term being created has no file yet, so no time to version its card with, and no card.
+        if ($content instanceof Term && ! is_file((string) $content->term()->path())) {
+            return null;
+        }
+
+        return $this->cardAddress($content, Shape::Landscape);
+    }
+
+    private function cardAddress(Entry|Term $content, Shape $shape): string
+    {
+        $absolute = (string) $content->absoluteUrl();
         $path = trim((string) parse_url($absolute, PHP_URL_PATH), '/');
         $route = ($path === '' ? 'og' : 'og/'.$path).$shape->suffix().'.png';
-        $token = Fields::isPreviewed($entry) ? '&token='.request()->statamicToken()?->token() : '';
+        $token = Fields::isPreviewed($content) ? '&token='.request()->statamicToken()?->token() : '';
 
-        return self::domainRoot($absolute).'/'.$route.'?v='.$entry->lastModified()->timestamp.$token;
+        return self::domainRoot($absolute).'/'.$route.'?v='.$content->lastModified()->timestamp.$token;
     }
 
     /**

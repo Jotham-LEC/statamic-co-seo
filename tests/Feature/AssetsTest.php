@@ -13,7 +13,7 @@ test('the one asset a field holds, in whatever shape it comes', function () {
         ->and(Assets::from($asset))->toBe($asset)
         ->and(Assets::from([$asset]))->toBe($asset)
         ->and(Assets::from(new Value($asset)))->toBe($asset)
-        ->and(Assets::from(Asset::query()->where('container', 'assets'))?->id())->toBe('assets::share.png')
+        ->and(Assets::from(Asset::query()->where('container', 'assets')->where('path', 'share.png'))?->id())->toBe('assets::share.png')
         ->and(Assets::from('assets::missing.png'))->toBeNull()
         ->and(Assets::from(null))->toBeNull()
         ->and(Assets::from([]))->toBeNull();

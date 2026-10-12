@@ -166,6 +166,7 @@ Register it and choose where it's used:
 ```php
 'og' => ['templates' => ['default' => DefaultTemplate::class, 'essay' => App\Og\EssayTemplate::class]],
 'collections' => ['essays' => ['og_template' => 'essay']],
+'taxonomies' => ['topics' => ['og_template' => 'essay']], // a term page's card
 ```
 
 A template draws the landscape card (1200×630) unless it lists more shapes; the others answer 404 for it. To draw them, return them from `shapes()` and size your layout from `$card->shape` (`width()`, `height()`). the-og's layouts fix their size in the class, so a shape other than 1200×630 needs an `AbstractLayout` subclass of your own that sets `$width` and `$height`, as `Og\Layouts\Branded` does:

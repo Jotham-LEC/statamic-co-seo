@@ -38,6 +38,13 @@ beforeEach(function () {
     $disk->put('typed.png', file_get_contents(__DIR__.'/../fixtures/share.png'));
 });
 
+// The asset files outlive a test: leave the container as it was found.
+afterEach(function () {
+    foreach (['saved.png', 'typed.png'] as $file) {
+        AssetContainer::find('assets')->disk()->delete($file);
+    }
+});
+
 /**
  * The values an editor's publish form holds for a page: every field, as the
  * control panel sends them, with these changed.

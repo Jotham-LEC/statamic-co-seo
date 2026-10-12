@@ -11,14 +11,16 @@ use JothamLec\MarketingToolkit\SiteSeo;
 use JothamLec\MarketingToolkit\Support\Features;
 use JothamLec\MarketingToolkit\Support\Fields;
 use Statamic\Contracts\Entries\Entry as EntryContract;
+use Statamic\Contracts\Taxonomies\Term as TermContract;
 use Statamic\Exceptions\NotFoundHttpException;
 use Statamic\Facades\Entry;
 use Statamic\Facades\Site;
+use Statamic\Facades\Term;
 use Statamic\Structures\Page;
 
 /**
  * Serves /og.png (home) and /og/{path}.png, the generated share card of the
- * published entry at that path on the domain, and its other shapes at /og.1x1.png,
+ * published entry (or the taxonomy term) at that path on the domain, and its other shapes at /og.1x1.png,
  * /og/{path}.1x1.png and the same with `.4x3`, when the entry's template draws them. The meta tags only point here when the entry has no uploaded share
  * image, but the card is served either way so that editors can preview it.
  *
@@ -56,18 +58,21 @@ final class OgImageController
         return $this->card($request, $generator, $seo, $this->entry($request, ''), Shape::fromSuffix($shape));
     }
 
-    private function card(Request $request, Generator $generator, SiteSeo $seo, ?EntryContract $entry, Shape $shape): Response
+    private function card(Request $request, Generator $generator, SiteSeo $seo, EntryContract|TermContract|null $entry, Shape $shape): Response
     {
         $previewed = $entry ? $this->previewed($request, $entry) : null;
         // A protected page is refused, because its card would show its title and text to anyone.
         throw_unless($entry && ($previewed || $entry->status() === 'published') && ! $seo->isProtected($entry), NotFoundHttpException::class);
-        throw_unless($generator->draws($entry, $shape), NotFoundHttpException::class);
+        $term = $entry instanceof TermContract;
+        throw_unless($term ? $generator->termDraws($entry, $shape) : $generator->draws($entry, $shape), NotFoundHttpException::class);
 
         if ($previewed) {
-            return new Response($generator->draw($previewed, $shape), 200, ['Content-Type' => 'image/png', 'Cache-Control' => 'no-store']);
+            $png = $previewed instanceof TermContract ? $generator->termDraw($previewed, $shape) : $generator->draw($previewed, $shape);
+
+            return new Response($png, 200, ['Content-Type' => 'image/png', 'Cache-Control' => 'no-store']);
         }
 
-        return new Response($generator->png($entry, $shape), 200, [
+        return new Response($term ? $generator->termPng($entry, $shape) : $generator->png($entry, $shape), 200, [
             'Content-Type' => 'image/png',
             'Cache-Control' => 'public, max-age='.(int) config('marketing-toolkit.og.max_age'),
         ]);
@@ -78,7 +83,7 @@ final class OgImageController
      * entry. The card routes are outside Statamic's web middleware, which would otherwise put
      * the previewed entry in place.
      */
-    private function previewed(Request $request, EntryContract $entry): ?EntryContract
+    private function previewed(Request $request, EntryContract|TermContract $entry): EntryContract|TermContract|null
     {
         if (! Fields::isPreviewed($entry)) {
             return null;
@@ -86,22 +91,25 @@ final class OgImageController
 
         $item = LivePreview::item($request->statamicToken());
 
-        return $item instanceof EntryContract ? $item : null;
+        return $item instanceof EntryContract || $item instanceof TermContract ? $item : null;
     }
 
     /**
-     * Finds the entry whose page is at $path on this domain. For example,
-     * /og/fr/a-propos.png is the card of /fr/a-propos, on the site under /fr/. A
-     * domain that no site is on (a local copy) is read as the current site's.
+     * Finds the entry, or else the taxonomy term, whose page is at $path on this
+     * domain. For example, /og/fr/a-propos.png is the card of /fr/a-propos, on the
+     * site under /fr/. A domain that no site is on (a local copy) is read as the
+     * current site's.
      */
-    private function entry(Request $request, string $path): ?EntryContract
+    private function entry(Request $request, string $path): EntryContract|TermContract|null
     {
         $url = $request->getSchemeAndHttpHost().'/'.$path;
         $site = Site::findByUrl($url);
-        $uri = $site ? $site->relativePath($url) : '/'.$path;
+        $uri = '/'.trim($site ? $site->relativePath($url) : '/'.$path, '/');
+        $handle = ($site ?? Site::current())->handle();
 
-        $entry = Entry::findByUri('/'.trim($uri, '/'), ($site ?? Site::current())->handle());
+        $entry = Entry::findByUri($uri, $handle);
+        $entry = $entry instanceof Page ? $entry->entry() : $entry;
 
-        return $entry instanceof Page ? $entry->entry() : $entry;
+        return $entry ?? ($uri === '/' ? null : Term::findByUri($uri, $handle));
     }
 }

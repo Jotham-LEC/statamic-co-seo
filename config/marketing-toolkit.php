@@ -82,7 +82,8 @@ return [
     |
     | A taxonomy's term pages take the same rules, keyed by taxonomy handle:
     | og_type, page_schema (CollectionPage suits a listing), title_fields,
-    | description_fields, image_fields and faq_field.
+    | description_fields, image_fields, faq_field and og_template. A term page
+    | gets a generated share card, as an entry does.
     |
     */
 
