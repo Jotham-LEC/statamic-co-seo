@@ -104,12 +104,9 @@ test('a term is previewed too', function () {
     $saved = previewOf('taxonomies.topics.topic', ['title' => 'Gardens and parks', 'slug' => 'gardens'], $term->in('default')->reference())
         ->assertOk()
         ->assertJson(['title' => 'Gardens and parks', 'url' => 'https://example.test/topics/gardens']);
-    // A saved term has its generated card, as an entry does, where cards can be drawn.
-    if (extension_loaded('imagick')) {
-        expect($saved->json('image.url'))->toStartWith('https://example.test/og/topics/gardens.png?v=');
-    } else {
-        expect($saved->json('image'))->toBeNull();
-    }
+    // A saved term has its generated card, as an entry does. (Without Imagick, tests/Pest.php
+    // counts cards as drawable, so this holds there too.)
+    expect($saved->json('image.url'))->toStartWith('https://example.test/og/topics/gardens.png?v=');
 
     // A term being created has no card yet.
     previewOf('taxonomies.topics.topic', ['title' => 'Ponds', 'slug' => 'ponds'])
