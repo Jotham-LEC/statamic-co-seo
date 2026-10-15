@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.29.0 – 2026-10-16
 
 Redirect rules can live in files committed with the site, and new sites keep them there.
 
