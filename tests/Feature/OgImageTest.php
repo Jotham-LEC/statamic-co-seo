@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use JothamLec\MarketingToolkit\Context;
 use JothamLec\MarketingToolkit\Og\Card;
 use JothamLec\MarketingToolkit\Og\DefaultTemplate;
@@ -191,3 +192,33 @@ describe('term pages', function () {
         expect(app(Generator::class)->termTemplate($term()))->toBeInstanceOf(QuietTemplate::class);
     });
 });
+
+test('a site labels a card by something of the entry\'s own', function () {
+    app()->bind(SiteSeo::class, fn () => new class extends SiteSeo
+    {
+        public function cardLabel(Context $context): ?string
+        {
+            return $context->entry?->get('category');
+        }
+    });
+
+    $generator = app(Generator::class);
+
+    expect($generator->card(entryIn('essays', 'filed', ['category' => 'Insights']))->label)->toBe('Insights')
+        ->and($generator->card(entryIn('pages', 'unfiled'))->label)->toBe('Acme');
+});
+
+test('keeps the drawn cards in the store the config names', function () {
+    config([
+        'cache.stores.cards' => ['driver' => 'array', 'serialize' => true],
+        'marketing-toolkit.og.cache_store' => 'cards',
+    ]);
+    $entry = entryIn('pages', 'stored');
+
+    app(Generator::class)->png($entry);
+
+    $cards = fn (string $store) => collect(Cache::store($store)->getStore()->all())->keys()->filter(fn ($key) => str_starts_with($key, 'mt:og:'));
+
+    expect($cards('cards'))->toHaveCount(1)
+        ->and($cards(config('cache.default')))->toBeEmpty();
+})->skip(! extension_loaded('imagick'), 'Share cards need PHP\'s imagick extension.');

@@ -401,6 +401,11 @@ return [
         'logo_position' => 'top',
 
         'max_age' => 60 * 60 * 24 * 30,
+
+        // The cache store that keeps the drawn cards, or null for the default store. A card is an
+        // image of about 100 KB in each of three shapes, so a site whose default store is its
+        // database may keep them in a file or Redis store instead.
+        'cache_store' => null,
     ],
 
 ];

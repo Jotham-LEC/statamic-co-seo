@@ -16,6 +16,7 @@ const SITE_SEO_API = [
     'public function authors(JothamLec\\MarketingToolkit\\Context $context): array',
     'public function breadcrumbNode(JothamLec\\MarketingToolkit\\Context $context): ?array',
     'public function canonical(JothamLec\\MarketingToolkit\\Context $context): ?string',
+    'public function cardLabel(JothamLec\\MarketingToolkit\\Context $context): ?string',
     'public function collectionConfig(JothamLec\\MarketingToolkit\\Context $context, string $key, mixed $default = null): mixed',
     'public function contentConfig(JothamLec\\MarketingToolkit\\Context $context, string $key, mixed $default = null): mixed',
     'public function customNodes(JothamLec\\MarketingToolkit\\Context $context): array',

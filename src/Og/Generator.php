@@ -71,7 +71,7 @@ class Generator
             md5(serialize($card)),
         ]);
 
-        return Cache::remember(
+        return Cache::store(config('marketing-toolkit.og.cache_store'))->remember(
             $key,
             (int) config('marketing-toolkit.og.max_age'),
             fn () => $template->image($card)->toString(),
@@ -139,7 +139,7 @@ class Generator
         // term's card is labelled with its taxonomy.
         $mount = $entry instanceof Entry ? $entry->collection()->mount() : null;
         $mount = $mount?->in($entry->locale()) ?? $mount;
-        $label = match (true) {
+        $label = $seo->cardLabel($context) ?? match (true) {
             $entry instanceof Term => (string) $entry->taxonomy()->title(),
             $mount !== null => (string) $mount->value('title'),
             default => $settings->siteName(),

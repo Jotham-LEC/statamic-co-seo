@@ -4,9 +4,11 @@
 
 ### Added
 - **A Google News sitemap.** Name the collections whose entries are news in `sitemap.news.collections`, and `/news-sitemap.xml` lists those published in the last two days, newest first, with the publication's name (the site's, or `sitemap.news.publication`), language, date and title; robots.txt lists it beside the sitemap. An entry dated later than now is left out, and so is one the sitemap leaves out. See [configuration.md](docs/configuration.md#sitemap-and-robotstxt).
+- **Generated cards can be kept out of the database.** `og.cache_store` names the cache store that keeps drawn cards. A card is about 100 KB in each of its three shapes, so a site whose default store is its database can keep them in a file or Redis store. See [configuration.md](docs/configuration.md#share-cards-and-images).
+- **A site can label a card by the entry's own data.** `SiteSeo::cardLabel()` returns the small label above a card's title; override it to show an article's category, say. See [developers.md](docs/developers.md#change-a-rule-siteseo).
 
 ### Upgrading
-- **Nothing to do.** With no collection named, the address answers 404 and robots.txt is unchanged. A site with a news sitemap of its own at `/news-sitemap.xml` keeps it, as the addon registers no route at an address the site has taken.
+- **Nothing to do.** With no collection named, the news sitemap's address answers 404 and robots.txt is unchanged; with `og.cache_store` unset, cards stay in the default store; `cardLabel()` returns null, which keeps the addon's labels. A site with a news sitemap of its own at `/news-sitemap.xml` keeps it, as the addon registers no route at an address the site has taken.
 - **For developers:** `TextFiles::robots()` takes the news sitemap's address as a third, optional argument.
 
 ## 0.27.2 – 2026-10-12

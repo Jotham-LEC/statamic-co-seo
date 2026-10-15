@@ -170,7 +170,8 @@ Setting it up:
 | `og.enabled` | `true` | Generated cards at `/og.png` (home) and `/og/{uri}.png`, for entries and taxonomy term pages. |
 | `og.templates` | `['default' => DefaultTemplate::class]` | Card designs by key; see [developers.md](developers.md#add-a-share-card-template). |
 | `og.logo_position` | `'top'` | Where the default card puts the brand: `'top'` or `'bottom'` (left-aligned either way). |
-| `og.max_age` | 30 days | `Cache-Control` max-age of the card images. |
+| `og.max_age` | 30 days | `Cache-Control` max-age of the card images, and how long a drawn card is kept. |
+| `og.cache_store` | `null` | The cache store that keeps drawn cards; `null` for the default. A card is about 100 KB in each shape, so on a site whose default store is its database, name a file or Redis store. |
 
 Each generated card comes in three shapes, at the card's address with a suffix:
 

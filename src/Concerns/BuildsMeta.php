@@ -366,6 +366,19 @@ trait BuildsMeta
         return $route !== null && in_array($route, (array) config('marketing-toolkit.robots.noindex_routes'), true);
     }
 
+    /**
+     * Returns the small label a generated card shows above its title, or null
+     * for the addon's: the title of the collection's mount page, a term's
+     * taxonomy name, else the site's name. A site overrides it to label a
+     * card by something of the entry's own, such as its category.
+     *
+     * @api
+     */
+    public function cardLabel(Context $context): ?string
+    {
+        return null;
+    }
+
     /** @api */
     public function ogType(Context $context): string
     {

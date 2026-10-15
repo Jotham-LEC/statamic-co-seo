@@ -91,6 +91,7 @@ The methods you're most likely to override:
 | `shouldNoindex(Context)` | Extra reasons to noindex (an empty listing, a thank-you page). Return `parent::shouldNoindex($context) || …`. |
 | `hiddenOutsideProduction()` | Whether this copy of the site is kept out of search engines (every page noindexed, robots.txt disallowing all): `marketing-toolkit.robots.noindex_outside_production` unless `APP_ENV=production`. |
 | `ogType(Context)` | og:type. |
+| `cardLabel(Context)` | The small label a generated card shows above its title, or `null` for the addon's (the collection's mount page title, a term's taxonomy name, else the site's name). Override it to label a card by something of the entry's own, such as its category. |
 | `graph(Context)` | Every JSON-LD node. Usually you override one of the node methods instead. |
 | `publisherTypes()`, `profileEntity(Context)`, `authors(Context)`, `articleImages(Context)` | The publisher's schema.org types; who a ProfilePage is about; an Article's authors; its images in three shapes. |
 | `websiteNode()`, `publisherNode()`, `webPageNode(Context)`, `breadcrumbNode(Context)`, `articleNode(Context)`, `productNode(Context)`, `faqNode(Context)` | One node each; return `null` to leave it out. Products come from a collection's `product` config. |
