@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.28.0 – 2026-10-15
 
 ### Added
 - **A Google News sitemap.** Name the collections whose entries are news in `sitemap.news.collections`, and `/news-sitemap.xml` lists those published in the last two days, newest first, with the publication's name (the site's, or `sitemap.news.publication`), language, date and title; robots.txt lists it beside the sitemap. An entry dated later than now is left out, and so is one the sitemap leaves out. See [configuration.md](docs/configuration.md#sitemap-and-robotstxt).
