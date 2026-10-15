@@ -43,6 +43,7 @@ Route::withoutMiddleware([
 
         $get('sitemap.xml', [SitemapController::class, 'index'])?->name('sitemap');
         $get('sitemap_{page}.xml', [SitemapController::class, 'page'])?->whereNumber('page')->name('sitemap.page');
+        $get('news-sitemap.xml', [SitemapController::class, 'news'])?->name('sitemap.news');
         $get('robots.txt', RobotsController::class)?->name('robots');
         $get(app(IndexNow::class)->key().'.txt', IndexNowKeyController::class)?->name('indexnow.key');
         $get('llms.txt', [TextFileController::class, 'llms'])?->name('llms');

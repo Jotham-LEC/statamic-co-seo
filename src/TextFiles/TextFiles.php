@@ -28,7 +28,7 @@ final class TextFiles
      * lines, and the sitemap. Everything is disallowed on a copy of the site
      * that is kept out of search engines ($hidden).
      */
-    public function robots(bool $hidden, string $sitemapUrl): string
+    public function robots(bool $hidden, string $sitemapUrl, ?string $newsSitemapUrl = null): string
     {
         if ($hidden) {
             return "User-agent: *\nDisallow: /\n";
@@ -52,6 +52,10 @@ final class TextFiles
         if (Features::on('sitemap')) {
             $lines[] = '';
             $lines[] = 'Sitemap: '.$sitemapUrl;
+
+            if ($newsSitemapUrl !== null) {
+                $lines[] = 'Sitemap: '.$newsSitemapUrl;
+            }
         }
 
         return implode("\n", $lines)."\n";

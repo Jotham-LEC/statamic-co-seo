@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
+use JothamLec\MarketingToolkit\Sitemap\NewsSitemap;
 use JothamLec\MarketingToolkit\SiteSeo;
 use JothamLec\MarketingToolkit\Support\Features;
 use JothamLec\MarketingToolkit\Support\Sites;
@@ -53,6 +54,17 @@ final class SitemapController
         throw_if($chunk->isEmpty(), NotFoundHttpException::class);
 
         return $this->xml(view('marketing-toolkit::sitemap', ['urls' => $chunk])->render());
+    }
+
+    /**
+     * Answers /news-sitemap.xml, the Google News sitemap. It isn't cached: it
+     * lists two days of articles, and the window moves on its own.
+     */
+    public function news(SiteSeo $seo): Response
+    {
+        throw_unless(Features::on('sitemap') && NewsSitemap::enabled(), NotFoundHttpException::class);
+
+        return $this->xml(view('marketing-toolkit::news-sitemap', ['urls' => app(NewsSitemap::class)->urls($seo)])->render());
     }
 
     /**

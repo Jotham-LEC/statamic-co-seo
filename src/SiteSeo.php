@@ -8,6 +8,7 @@ use JothamLec\MarketingToolkit\Concerns\BuildsMeta;
 use JothamLec\MarketingToolkit\Concerns\BuildsSchema;
 use JothamLec\MarketingToolkit\Concerns\InteractsWithContent;
 use JothamLec\MarketingToolkit\Concerns\ResolvesAlternates;
+use JothamLec\MarketingToolkit\Sitemap\NewsSitemap;
 use JothamLec\MarketingToolkit\Sitemap\Sitemap;
 use JothamLec\MarketingToolkit\Support\Fields;
 use JothamLec\MarketingToolkit\TextFiles\TextFiles;
@@ -136,7 +137,11 @@ class SiteSeo
     /** @api */
     public function robotsTxt(): string
     {
-        return app(TextFiles::class)->robots($this->hiddenOutsideProduction(), $this->absolute('/sitemap.xml'));
+        return app(TextFiles::class)->robots(
+            $this->hiddenOutsideProduction(),
+            $this->absolute('/sitemap.xml'),
+            NewsSitemap::enabled() ? $this->absolute('/news-sitemap.xml') : null,
+        );
     }
 
     /**

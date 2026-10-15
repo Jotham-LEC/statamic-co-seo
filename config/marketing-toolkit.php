@@ -128,6 +128,15 @@ return [
 
         // When there are more URLs than this, /sitemap.xml becomes an index of /sitemap_{n}.xml.
         'per_page' => 1000,
+
+        // A Google News sitemap at /news-sitemap.xml, listed in robots.txt: the entries of these
+        // collections published in the last two days. It answers 404 while none is named.
+        'news' => [
+            'collections' => [],
+
+            // The publication's name as Google News knows it; the site's name when null.
+            'publication' => null,
+        ],
     ],
 
     'robots_txt' => [

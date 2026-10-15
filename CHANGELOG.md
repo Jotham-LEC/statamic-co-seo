@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **A Google News sitemap.** Name the collections whose entries are news in `sitemap.news.collections`, and `/news-sitemap.xml` lists those published in the last two days, newest first, with the publication's name (the site's, or `sitemap.news.publication`), language, date and title; robots.txt lists it beside the sitemap. An entry dated later than now is left out, and so is one the sitemap leaves out. See [configuration.md](docs/configuration.md#sitemap-and-robotstxt).
+
+### Upgrading
+- **Nothing to do.** With no collection named, the address answers 404 and robots.txt is unchanged. A site with a news sitemap of its own at `/news-sitemap.xml` keeps it, as the addon registers no route at an address the site has taken.
+- **For developers:** `TextFiles::robots()` takes the news sitemap's address as a third, optional argument.
+
 ## 0.27.2 – 2026-10-12
 
 ### Added
