@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.29.1 – 2026-10-16
+
+### Fixed
+- **llms.txt keeps its order between builds.** Each collection's pages are listed newest first, and pages changed in the same second (an import, a migration) are now listed by title. They used to come in whatever order they were loaded, which could change from one build to the next.
+
+### Upgrading
+- **Nothing to do.**
+
 ## 0.29.0 – 2026-10-16
 
 Redirect rules can live in files committed with the site, and new sites keep them there.

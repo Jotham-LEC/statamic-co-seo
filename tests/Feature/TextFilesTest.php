@@ -1,5 +1,6 @@
 <?php
 
+use Carbon\Carbon;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\View;
 use Statamic\Facades\Collection;
@@ -19,6 +20,25 @@ test('llms.txt lists each collection\'s pages with their descriptions, without h
         ->toContain('- [About (us)](https://example.test/about): Who we are.')
         ->toContain('- [Team](https://example.test/team)')
         ->not->toContain('hidden');
+});
+
+test('llms.txt lists pages changed in the same second by title, newest first otherwise', function () {
+    Collection::findByHandle('pages')->title('Pages')->save();
+    $sameSecond = Carbon::parse('2026-10-01 09:00:00')->timestamp;
+    entryIn('pages', 'cherry', ['updated_at' => $sameSecond]);
+    entryIn('pages', 'apple', ['updated_at' => $sameSecond]);
+    entryIn('pages', 'banana', ['updated_at' => $sameSecond]);
+    entryIn('pages', 'zucchini', ['updated_at' => Carbon::parse('2026-10-02 09:00:00')->timestamp]);
+
+    $text = $this->get('https://example.test/llms.txt')->assertOk()->getContent();
+
+    expect(array_values(array_filter(explode("\n", $text), fn (string $line) => str_starts_with($line, '- '))))
+        ->sequence(
+            fn ($line) => $line->toStartWith('- [Zucchini]'),
+            fn ($line) => $line->toStartWith('- [Apple]'),
+            fn ($line) => $line->toStartWith('- [Banana]'),
+            fn ($line) => $line->toStartWith('- [Cherry]'),
+        );
 });
 
 test('llms.txt at the domain\'s root lists the sites in its folders too', function () {

@@ -122,7 +122,12 @@ final class TextFiles
                 ->whereStatus('published')
                 ->get()
                 ->filter(fn (Entry $entry) => $seo->inSitemap($entry))
-                ->sortByDesc(fn (Entry $entry) => $entry->lastModified()?->timestamp)
+                // Newest first; pages changed in the same second (an import, a migration)
+                // by title, so the list doesn't change order from one build to the next.
+                ->sortBy([
+                    fn (Entry $a, Entry $b) => $b->lastModified()?->timestamp <=> $a->lastModified()?->timestamp,
+                    fn (Entry $a, Entry $b) => strnatcasecmp((string) $a->value('title'), (string) $b->value('title')),
+                ])
                 ->take($perCollection);
 
             if ($entries->isEmpty()) {
