@@ -2,8 +2,10 @@
 
 use JothamLec\MarketingToolkit\Actions\CreateRedirect;
 use JothamLec\MarketingToolkit\NotFound\MissingPath;
-use JothamLec\MarketingToolkit\Redirects\Redirect;
 use Statamic\Facades\Entry;
+
+// These run on both drivers: composer test runs the group again on files (MT_TEST_REDIRECTS=file).
+pest()->group('redirects');
 
 /*
  * Sites in folders of one domain (multilang(): French under /fr/, British
@@ -19,7 +21,7 @@ test('a page renamed on a site in a folder redirects from its old address there'
 
     Entry::find($entry->id())->syncOriginal()->slug('qui-sommes-nous')->save();
 
-    expect(Redirect::query()->get(['site', 'source', 'target'])->toArray())->toBe([
+    expect(redirectRules()->map(fn ($rule) => collect($rule->toArray())->only(['site', 'source', 'target'])->all())->all())->toBe([
         ['site' => 'fr', 'source' => '/a-propos', 'target' => '/qui-sommes-nous'],
     ]);
 
@@ -30,8 +32,8 @@ test('a page renamed on a site in a folder redirects from its old address there'
 });
 
 test('a rule for every site applies within each site\'s folder', function () {
-    Redirect::query()->create(['source' => '/old', 'target' => '/new']);
-    Redirect::query()->create(['source' => '/blog/*', 'target' => '/essays/$1']);
+    redirectRule(['source' => '/old', 'target' => '/new']);
+    redirectRule(['source' => '/blog/*', 'target' => '/essays/$1']);
 
     $this->get('https://example.test/old')->assertRedirect('https://example.test/new');
     $this->get('https://example.test/fr/old')->assertRedirect('https://example.test/fr/new');
@@ -40,9 +42,9 @@ test('a rule for every site applies within each site\'s folder', function () {
 });
 
 test('a rule typed with the site\'s folder, as before, still applies, and its target isn\'t given the folder twice', function () {
-    Redirect::query()->create(['site' => 'fr', 'source' => '/fr/old', 'target' => '/fr/a-propos']);
-    Redirect::query()->create(['site' => 'fr', 'source' => '/fr/older', 'target' => '/a-propos']);
-    Redirect::query()->create(['site' => 'fr', 'source' => '/fr/blog/*', 'target' => '/fr/essais/$1']);
+    redirectRule(['site' => 'fr', 'source' => '/fr/old', 'target' => '/fr/a-propos']);
+    redirectRule(['site' => 'fr', 'source' => '/fr/older', 'target' => '/a-propos']);
+    redirectRule(['site' => 'fr', 'source' => '/fr/blog/*', 'target' => '/fr/essais/$1']);
 
     $this->get('https://example.test/fr/old')->assertRedirect('https://example.test/fr/a-propos');
     $this->get('https://example.test/fr/older')->assertRedirect('https://example.test/fr/a-propos');
@@ -50,9 +52,9 @@ test('a rule typed with the site\'s folder, as before, still applies, and its ta
 });
 
 test('within the site wins over a rule typed with the folder, and a rule leading back to the address asked for is not served', function () {
-    Redirect::query()->create(['site' => 'fr', 'source' => '/fr/old', 'target' => '/legacy']);
-    Redirect::query()->create(['site' => 'fr', 'source' => '/old', 'target' => '/current']);
-    Redirect::query()->getConnection()->table('mt_redirects')->insert(['site' => 'fr', 'source' => '/loop', 'target' => '/fr/loop', 'status' => 301, 'active' => true, 'automatic' => false, 'hits' => 0]);
+    redirectRule(['site' => 'fr', 'source' => '/fr/old', 'target' => '/legacy']);
+    redirectRule(['site' => 'fr', 'source' => '/old', 'target' => '/current']);
+    storedRule(['site' => 'fr', 'source' => '/loop', 'target' => '/fr/loop']);
 
     $this->get('https://example.test/fr/old')->assertRedirect('https://example.test/fr/current');
     $this->get('https://example.test/fr/loop')->assertNotFound();
@@ -69,7 +71,7 @@ test('the 404 log keeps a path within its site, and a redirect made from it appl
     $this->postJson(cp_route('mt.actions.run'), ['action' => CreateRedirect::handle(), 'selections' => [$row->id], 'context' => ['type' => '404s'], 'values' => []])
         ->assertJsonPath('redirect', cp_route('mt.redirects.create', ['source' => '/manquant', 'site' => 'fr']));
 
-    Redirect::query()->create(['site' => 'fr', 'source' => '/manquant', 'target' => '/a-propos']);
+    redirectRule(['site' => 'fr', 'source' => '/manquant', 'target' => '/a-propos']);
 
     $this->get('https://example.test/fr/manquant', $browser)->assertRedirect('https://example.test/fr/a-propos');
 });
@@ -77,7 +79,7 @@ test('the 404 log keeps a path within its site, and a redirect made from it appl
 test('a 404 path logged with the site\'s folder, as before, makes a redirect that still applies', function () use ($browser) {
     // As logged before paths were kept within the site.
     MissingPath::query()->create(['site' => 'fr', 'path' => '/fr/ancien', 'hits' => 3, 'first_seen_at' => now(), 'last_seen_at' => now()]);
-    Redirect::query()->create(['site' => 'fr', 'source' => '/fr/ancien', 'target' => '/a-propos']);
+    redirectRule(['site' => 'fr', 'source' => '/fr/ancien', 'target' => '/a-propos']);
 
     $this->get('https://example.test/fr/ancien', $browser)->assertRedirect('https://example.test/fr/a-propos');
 });

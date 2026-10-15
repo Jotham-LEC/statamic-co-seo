@@ -185,7 +185,18 @@ Cards are cached per entry, last-modified time, template, version, shape, logo a
 
 ## Redirects, 404s and reports from code
 
-- **Redirects** are the Eloquent model `JothamLec\MarketingToolkit\Redirects\Redirect` (`site`, `source`, `target`, `status`, `active`, `automatic`, `hits`, `last_hit_at`). `site` is a site handle, or null for every site (always null on a single site). Saving or deleting one through the model clears the cached rules; after bulk queries, call `JothamLec\MarketingToolkit\Redirects\Matcher::flush()`.
+- **Redirects** are read and written through `app(JothamLec\MarketingToolkit\Redirects\RedirectRepository::class)`, which works on whichever driver keeps them (files or the database; see [configuration.md](configuration.md#where-redirects-are-kept)). Resolve it when you need it rather than holding on to it: the driver is chosen from the config each time. It deals in `JothamLec\MarketingToolkit\Redirects\Rule` objects (`id`, `site`, `source`, `target`, `status`, `active`, `automatic`, and `hits` and `lastHitAt` where read). `site` is a site handle, or null for every site (always null on a single site); `id` is a string. `all()`, `find($id)`, `onSite($site)`, `forSource($source, $site)` read; `save($rule)` (which tidies the source and target, and gives a new rule its id) and `delete($rule)` write, and clear the compiled rules. `batch(fn () => …)` saves many at once: one transaction in the database, or each changed file written once. `Rule::validator($data)` checks fields as the Redirects form does.
+
+  ```php
+  use JothamLec\MarketingToolkit\Redirects\RedirectRepository;
+  use JothamLec\MarketingToolkit\Redirects\Rule;
+
+  app(RedirectRepository::class)->save(Rule::make(['source' => '/old', 'target' => '/new', 'status' => 301]));
+  ```
+
+- **Redirect events**: `JothamLec\MarketingToolkit\Events\RedirectSaved` and `RedirectDeleted` (with the `Rule` as `$redirect`) fire on either driver, and Statamic's Git automation commits on them.
+- **The `Redirect` model** is the table `mt_redirects` (`site`, `source`, `target`, `status`, `active`, `automatic`, `hits`, `last_hit_at`), which the Eloquent driver keeps rules in. Writing through it writes the database whatever the driver, which keeps a site's own migrations that insert rules working; such rows are used only on the Eloquent driver (or while the [safety net](configuration.md#where-redirects-are-kept) holds), and `mt:export-redirects` moves them into files. Saving or deleting a row through the model clears the cached rules.
+- **The compiled rules** are cached per site. If you change rules another way (bulk queries on `mt_redirects`, a file written by your own code), or change `redirects.driver` or `redirects.directory` while the app runs, call `JothamLec\MarketingToolkit\Redirects\Matcher::flush()`. On the file driver, `php please stache:clear` does it too.
 - **Automatic redirects** go through `JothamLec\MarketingToolkit\Redirects\AutoRedirects::create($from, $to, $site)`, which also collapses chains among that site's rules. Use it when you move content in code.
 - **The 404 log** is `JothamLec\MarketingToolkit\NotFound\MissingPath` (with `site`, as redirects).
 - **Reports**: `app(JothamLec\MarketingToolkit\Reports\Runner::class)->runToEnd($runner->start(site: 'handle'))` runs one in-process; without `site`, of the current site. Reports, like the 404 log, have a `site` column that is null on a single site. Each check is a class in `src/Reports/Rules` extending `Rule` (`handle()`, `label()`, `weight()`, `check($url, PageFacts, SiteFacts): Result`).

@@ -10,7 +10,8 @@ use JothamLec\MarketingToolkit\Actions\DeleteRecords;
 use JothamLec\MarketingToolkit\IndexNow\IndexNow;
 use JothamLec\MarketingToolkit\NotFound\MissingPath;
 use JothamLec\MarketingToolkit\Og\Generator;
-use JothamLec\MarketingToolkit\Redirects\Redirect;
+use JothamLec\MarketingToolkit\Redirects\RedirectRepository;
+use JothamLec\MarketingToolkit\Redirects\Rule;
 use JothamLec\MarketingToolkit\Reports\Report;
 use JothamLec\MarketingToolkit\Reports\Runner;
 use JothamLec\MarketingToolkit\SearchConsole\Client;
@@ -131,11 +132,11 @@ test('IndexNow gets one request per domain, each with that domain\'s key file', 
 
 describe('redirects', function () {
     test('a rule applies on its own site; a rule for every site on each; a site\'s own wins', function () {
-        Redirect::query()->create(['source' => '/old', 'target' => '/everywhere']);
-        Redirect::query()->create(['site' => 'cothinking', 'source' => '/old', 'target' => '/here']);
-        Redirect::query()->create(['site' => 'cothinking', 'source' => '/only-there', 'target' => '/there']);
-        Redirect::query()->create(['site' => 'cothinking', 'source' => '/blog/*', 'target' => '/notes/$1']);
-        Redirect::query()->create(['source' => '/blog/*', 'target' => '/essays/$1']);
+        redirectRule(['source' => '/old', 'target' => '/everywhere']);
+        redirectRule(['site' => 'cothinking', 'source' => '/old', 'target' => '/here']);
+        redirectRule(['site' => 'cothinking', 'source' => '/only-there', 'target' => '/there']);
+        redirectRule(['site' => 'cothinking', 'source' => '/blog/*', 'target' => '/notes/$1']);
+        redirectRule(['source' => '/blog/*', 'target' => '/essays/$1']);
 
         $this->get('https://cothink.test/old')->assertRedirect('https://cothink.test/here');
         $this->get('https://example.test/old')->assertRedirect('https://example.test/everywhere');
@@ -146,30 +147,30 @@ describe('redirects', function () {
     });
 
     test('one rule per address per site, and loops are looked for on the sites a rule applies on', function () {
-        Redirect::query()->create(['site' => 'cothinking', 'source' => '/b', 'target' => '/a']);
+        redirectRule(['site' => 'cothinking', 'source' => '/b', 'target' => '/a']);
 
-        expect(Redirect::validator(['site' => 'default', 'source' => '/b', 'target' => '/c', 'status' => 301])->passes())->toBeTrue()
-            ->and(Redirect::validator(['site' => 'cothinking', 'source' => '/b', 'target' => '/c', 'status' => 301])->errors()->first('source'))->toContain('already starts')
-            ->and(Redirect::validator(['site' => 'elsewhere', 'source' => '/z', 'target' => '/c', 'status' => 301])->errors()->has('site'))->toBeTrue()
+        expect(Rule::validator(['site' => 'default', 'source' => '/b', 'target' => '/c', 'status' => 301])->passes())->toBeTrue()
+            ->and(Rule::validator(['site' => 'cothinking', 'source' => '/b', 'target' => '/c', 'status' => 301])->errors()->first('source'))->toContain('already starts')
+            ->and(Rule::validator(['site' => 'elsewhere', 'source' => '/z', 'target' => '/c', 'status' => 301])->errors()->has('site'))->toBeTrue()
             // On the other site nothing leads back.
-            ->and(Redirect::validator(['site' => 'default', 'source' => '/a', 'target' => '/b', 'status' => 301])->passes())->toBeTrue()
-            ->and(Redirect::validator(['site' => 'cothinking', 'source' => '/a', 'target' => '/b', 'status' => 301])->errors()->first('target'))->toContain('loop')
+            ->and(Rule::validator(['site' => 'default', 'source' => '/a', 'target' => '/b', 'status' => 301])->passes())->toBeTrue()
+            ->and(Rule::validator(['site' => 'cothinking', 'source' => '/a', 'target' => '/b', 'status' => 301])->errors()->first('target'))->toContain('loop')
             // A rule for every site would loop on cothinking.
-            ->and(Redirect::validator(['source' => '/a', 'target' => '/b', 'status' => 301])->errors()->first('target'))->toContain('loop');
+            ->and(Rule::validator(['source' => '/a', 'target' => '/b', 'status' => 301])->errors()->first('target'))->toContain('loop');
     });
 
     test('ignoring letter case, an address is still one per site, matched on its own site', function () {
         config(['marketing-toolkit.redirects.case_sensitive' => false]);
         $this->actingAs(cpUser(['manage marketing toolkit redirects', 'access default site', 'access cothinking site']));
-        Redirect::query()->create(['site' => 'cothinking', 'source' => '/About', 'target' => '/here']);
-        Redirect::query()->create(['source' => '/about', 'target' => '/everywhere']);
+        redirectRule(['site' => 'cothinking', 'source' => '/About', 'target' => '/here']);
+        redirectRule(['source' => '/about', 'target' => '/everywhere']);
 
-        expect(Redirect::validator(['site' => 'cothinking', 'source' => '/ABOUT', 'target' => '/x', 'status' => 301])->errors()->first('source'))->toContain('already starts')
-            ->and(Redirect::validator(['site' => 'default', 'source' => '/ABOUT', 'target' => '/x', 'status' => 301])->passes())->toBeTrue()
-            ->and(Redirect::validator(['site' => 'cothinking', 'source' => '/b', 'target' => '/ABOUT', 'status' => 301])->passes())->toBeTrue();
+        expect(Rule::validator(['site' => 'cothinking', 'source' => '/ABOUT', 'target' => '/x', 'status' => 301])->errors()->first('source'))->toContain('already starts')
+            ->and(Rule::validator(['site' => 'default', 'source' => '/ABOUT', 'target' => '/x', 'status' => 301])->passes())->toBeTrue()
+            ->and(Rule::validator(['site' => 'cothinking', 'source' => '/b', 'target' => '/ABOUT', 'status' => 301])->passes())->toBeTrue();
 
-        Redirect::query()->create(['site' => 'cothinking', 'source' => '/here', 'target' => '/b']);
-        expect(Redirect::validator(['site' => 'cothinking', 'source' => '/B', 'target' => '/ABOUT', 'status' => 301])->errors()->first('target'))->toContain('loop');
+        redirectRule(['site' => 'cothinking', 'source' => '/here', 'target' => '/b']);
+        expect(Rule::validator(['site' => 'cothinking', 'source' => '/B', 'target' => '/ABOUT', 'status' => 301])->errors()->first('target'))->toContain('loop');
 
         // The site's own rule, though another case, wins over the one for every site in the very case asked.
         $this->get('https://cothink.test/about')->assertRedirect('https://cothink.test/here');
@@ -179,8 +180,8 @@ describe('redirects', function () {
         $result = $this->post(cp_route('mt.redirects.import'), ['file' => UploadedFile::fake()->createWithContent('r.csv', $csv)])->assertOk()->json();
 
         expect($result)->toMatchArray(['created' => 0, 'updated' => 1])
-            ->and(Redirect::query()->where('site', 'cothinking')->orderBy('id')->value('target'))->toBe('/updated')
-            ->and(Redirect::query()->whereNull('site')->value('target'))->toBe('/everywhere');
+            ->and(app(RedirectRepository::class)->onSite('cothinking')->first()->target)->toBe('/updated')
+            ->and(app(RedirectRepository::class)->onSite(null)->first()->target)->toBe('/everywhere');
     });
 
     test('the form offers the sites, and a redirect made from a site\'s 404 starts on that site', function () {
@@ -194,14 +195,14 @@ describe('redirects', function () {
         $this->postJson(cp_route('mt.redirects.store'), ['site' => 'cothinking', 'source' => '/missing', 'target' => '/found', 'status' => '301', 'active' => true])->assertOk();
         $this->postJson(cp_route('mt.redirects.store'), ['source' => '/missing', 'target' => '/found', 'status' => '301', 'active' => true])->assertOk();
 
-        expect(Redirect::query()->orderBy('id')->pluck('site')->all())->toBe(['cothinking', null])
+        expect(redirectRules()->pluck('site')->all())->toEqualCanonicalizing(['cothinking', null])
             ->and($this->getJson(cp_route('mt.redirects.listing', ['sort' => 'id']))->json('meta.columns.*.field'))->toContain('site');
     });
 
     test('CSV carries each rule\'s site', function () {
         $this->actingAs(cpUser(['manage marketing toolkit redirects', 'access default site', 'access cothinking site']));
-        Redirect::query()->create(['source' => '/one', 'target' => '/1']);
-        Redirect::query()->create(['site' => 'cothinking', 'source' => '/one', 'target' => '/uno']);
+        redirectRule(['source' => '/one', 'target' => '/1']);
+        redirectRule(['site' => 'cothinking', 'source' => '/one', 'target' => '/uno']);
 
         expect($this->get(cp_route('mt.redirects.export'))->streamedContent())->toBe("source,target,status,active,site\n/one,/1,301,1,\n/one,/uno,301,1,cothinking\n");
 
@@ -210,7 +211,7 @@ describe('redirects', function () {
 
         expect($result)->toMatchArray(['created' => 1, 'updated' => 1])
             ->and($result['errors'])->toHaveCount(1)
-            ->and(Redirect::query()->orderBy('id')->get(['site', 'source', 'target'])->toArray())->toBe([
+            ->and(ruleRows(['site', 'source', 'target']))->toBe([
                 ['site' => null, 'source' => '/one', 'target' => '/1'],
                 ['site' => 'cothinking', 'source' => '/one', 'target' => '/eins'],
                 ['site' => 'cothinking', 'source' => '/two', 'target' => '/2'],
@@ -219,31 +220,31 @@ describe('redirects', function () {
 
     test('a user who may work on one site manages only its rules: those for every site apply on sites they can\'t see', function () {
         $this->actingAs(cpUser(['manage marketing toolkit redirects', 'access cothinking site']));
-        $theirs = Redirect::query()->create(['site' => 'cothinking', 'source' => '/theirs', 'target' => '/a']);
-        $everywhere = Redirect::query()->create(['source' => '/everywhere', 'target' => '/b']);
-        $other = Redirect::query()->create(['site' => 'default', 'source' => '/other', 'target' => '/c']);
+        $theirs = redirectRule(['site' => 'cothinking', 'source' => '/theirs', 'target' => '/a']);
+        $everywhere = redirectRule(['source' => '/everywhere', 'target' => '/b']);
+        $other = redirectRule(['site' => 'default', 'source' => '/other', 'target' => '/c']);
         $form = fn (array $values = []) => ['source' => '/x', 'target' => '/y', 'status' => '301', 'active' => true, ...$values];
 
         expect($this->getJson(cp_route('mt.redirects.listing', ['sort' => 'id']))->json('data.*.source'))->toBe(['/theirs'])
             ->and($this->get(cp_route('mt.redirects.export'))->streamedContent())->not->toContain('/other')->not->toContain('/everywhere');
 
         foreach ([$other, $everywhere] as $redirect) {
-            $this->get(cp_route('mt.redirects.edit', $redirect))->assertNotFound();
-            $this->patchJson(cp_route('mt.redirects.update', $redirect), $form(['source' => $redirect->source, 'site' => 'cothinking']))->assertNotFound();
+            $this->get(cp_route('mt.redirects.edit', $redirect->id))->assertNotFound();
+            $this->patchJson(cp_route('mt.redirects.update', $redirect->id), $form(['source' => $redirect->source, 'site' => 'cothinking']))->assertNotFound();
             $this->postJson(cp_route('mt.actions.run'), ['action' => DeleteRecords::handle(), 'selections' => [$redirect->id], 'context' => ['type' => 'redirects'], 'values' => []])->assertNotFound();
         }
 
         $this->postJson(cp_route('mt.redirects.store'), $form(['site' => 'default']))->assertJsonValidationErrors('site');
         $this->postJson(cp_route('mt.redirects.store'), $form(['site' => null]))->assertJsonValidationErrors(['site' => 'Only someone who may work on every site']);
-        $this->patchJson(cp_route('mt.redirects.update', $theirs), $form(['source' => '/theirs', 'site' => null]))->assertJsonValidationErrors('site');
+        $this->patchJson(cp_route('mt.redirects.update', $theirs->id), $form(['source' => '/theirs', 'site' => null]))->assertJsonValidationErrors('site');
 
         // A new rule's form starts on their site, with no "every site" to choose.
         $this->get(cp_route('mt.redirects.create'))->assertInertia(fn (AssertableInertia $page) => $page
             ->where('values.site', 'cothinking')
             ->where('blueprint.tabs.0.sections.0.fields.4.clearable', false));
 
-        $this->get(cp_route('mt.redirects.edit', $theirs))->assertOk();
-        $this->patchJson(cp_route('mt.redirects.update', $theirs), $form(['source' => '/theirs', 'target' => '/a2', 'site' => 'cothinking']))->assertOk();
+        $this->get(cp_route('mt.redirects.edit', $theirs->id))->assertOk();
+        $this->patchJson(cp_route('mt.redirects.update', $theirs->id), $form(['source' => '/theirs', 'target' => '/a2', 'site' => 'cothinking']))->assertOk();
         $this->postJson(cp_route('mt.actions.run'), ['action' => DeleteRecords::handle(), 'selections' => [$theirs->id], 'context' => ['type' => 'redirects'], 'values' => []])->assertOk();
 
         // A row for every site (no site) is refused, as for another site.
@@ -252,37 +253,37 @@ describe('redirects', function () {
 
         expect($result)->toMatchArray(['created' => 1, 'updated' => 0])
             ->and($result['errors'])->toHaveCount(3)
-            ->and(Redirect::query()->orderBy('id')->get(['source', 'target'])->toArray())->toBe([
-                ['source' => '/everywhere', 'target' => '/b'],
-                ['source' => '/other', 'target' => '/c'],
-                ['source' => '/mine', 'target' => '/1'],
+            ->and(ruleRows(['site', 'source', 'target']))->toBe([
+                ['site' => null, 'source' => '/everywhere', 'target' => '/b'],
+                ['site' => 'cothinking', 'source' => '/mine', 'target' => '/1'],
+                ['site' => 'default', 'source' => '/other', 'target' => '/c'],
             ]);
     });
 
     test('a user who may work on every site manages the rules for every site', function () {
         $this->actingAs(cpUser(['manage marketing toolkit redirects', 'access default site', 'access cothinking site']));
-        $everywhere = Redirect::query()->create(['source' => '/everywhere', 'target' => '/b']);
+        $everywhere = redirectRule(['source' => '/everywhere', 'target' => '/b']);
 
         expect($this->getJson(cp_route('mt.redirects.listing'))->json('data.*.source'))->toBe(['/everywhere']);
 
         $this->get(cp_route('mt.redirects.create'))->assertInertia(fn (AssertableInertia $page) => $page->where('values.site', null));
-        $this->patchJson(cp_route('mt.redirects.update', $everywhere), ['source' => '/everywhere', 'target' => '/b2', 'status' => '301', 'active' => true])->assertOk();
+        $this->patchJson(cp_route('mt.redirects.update', $everywhere->id), ['source' => '/everywhere', 'target' => '/b2', 'status' => '301', 'active' => true])->assertOk();
         $this->postJson(cp_route('mt.redirects.store'), ['source' => '/new', 'target' => '/n', 'status' => '301', 'active' => true])->assertOk();
 
-        expect(Redirect::query()->whereNull('site')->pluck('target')->all())->toBe(['/b2', '/n']);
+        expect(app(RedirectRepository::class)->onSite(null)->pluck('target')->sort()->values()->all())->toBe(['/b2', '/n']);
     });
-});
+})->group('redirects');
 
 describe('automatic redirects', function () {
     test('a moved page\'s 301 is for its own site, and only that site\'s rules change', function () {
-        Redirect::query()->create(['site' => 'default', 'source' => '/older', 'target' => '/about']);
-        Redirect::query()->create(['site' => 'default', 'source' => '/about-us', 'target' => '/elsewhere']);
-        Redirect::query()->create(['site' => 'cothinking', 'source' => '/oldest', 'target' => '/about']);
+        redirectRule(['site' => 'default', 'source' => '/older', 'target' => '/about']);
+        redirectRule(['site' => 'default', 'source' => '/about-us', 'target' => '/elsewhere']);
+        redirectRule(['site' => 'cothinking', 'source' => '/oldest', 'target' => '/about']);
         $entry = entryOn('cothinking', 'pages', 'about');
 
         Entry::find($entry->id())->syncOriginal()->slug('about-us')->save();
 
-        expect(Redirect::query()->orderBy('site')->orderBy('source')->get(['site', 'source', 'target', 'automatic'])->toArray())->toBe([
+        expect(ruleRows(['site', 'source', 'target', 'automatic']))->toBe([
             ['site' => 'cothinking', 'source' => '/about', 'target' => '/about-us', 'automatic' => true],
             ['site' => 'cothinking', 'source' => '/oldest', 'target' => '/about-us', 'automatic' => false],
             // The default site's page at /about hasn't moved, and nothing changed /about-us there.
@@ -299,7 +300,7 @@ describe('automatic redirects', function () {
 
         Term::find('topics::gardens')->term()->syncOriginal()->slug('gardening')->save();
 
-        expect(Redirect::query()->orderBy('site')->get(['site', 'source', 'target'])->toArray())->toBe([
+        expect(ruleRows(['site', 'source', 'target']))->toBe([
             ['site' => 'cothinking', 'source' => '/topics/gardens', 'target' => '/topics/gardening'],
             ['site' => 'default', 'source' => '/topics/gardens', 'target' => '/topics/gardening'],
         ]);
@@ -311,7 +312,7 @@ describe('automatic redirects', function () {
 
         Term::find('topics::gardens')->term()->syncOriginal()->slug('gardening')->save();
 
-        expect(Redirect::query()->get(['site', 'source', 'target'])->toArray())->toBe([
+        expect(ruleRows(['site', 'source', 'target']))->toBe([
             ['site' => 'cothinking', 'source' => '/topics/gardens', 'target' => '/topics/gardening'],
         ]);
     });
@@ -325,11 +326,11 @@ describe('automatic redirects', function () {
         $tree = $collection->structure()->in('cothinking')->syncOriginal();
         $tree->tree([['entry' => $guide->id(), 'children' => [['entry' => $setup->id()]]]])->save();
 
-        expect(Redirect::query()->get(['site', 'source', 'target'])->toArray())->toBe([
+        expect(ruleRows(['site', 'source', 'target']))->toBe([
             ['site' => 'cothinking', 'source' => '/setup', 'target' => '/guide/setup'],
         ]);
     });
-});
+})->group('redirects');
 
 describe('reports', function () {
     beforeEach(fn () => seoGlobal([]));
@@ -355,7 +356,7 @@ describe('reports', function () {
     test('links are checked against the report\'s own site, its pages and its redirects', function () {
         entryIn('pages', 'only-here');
         entryOn('cothinking', 'pages', 'work');
-        Redirect::query()->create(['site' => 'cothinking', 'source' => '/old-work', 'target' => '/work']);
+        redirectRule(['site' => 'cothinking', 'source' => '/old-work', 'target' => '/work']);
         entryOn('cothinking', 'pages', 'hello', ['body' => '<a href="/work">w</a> <a href="/old-work">o</a> <a href="/only-here">h</a> <a href="https://example.test/only-here">x</a> <a href="https://cothink.test/work">c</a>']);
 
         $runner = app(Runner::class);
@@ -435,9 +436,9 @@ test('the 404 log keeps each site\'s misses apart, and a redirect made from one 
 test('the overview and the dashboard widget are of the site selected in the control panel', function () {
     seoGlobal(['title_separator' => '|']);
     seoGlobal(['title_separator' => '–'], 'cothinking');
-    Redirect::query()->create(['source' => '/everywhere', 'target' => '/x']);
-    Redirect::query()->create(['site' => 'cothinking', 'source' => '/here', 'target' => '/x']);
-    Redirect::query()->create(['site' => 'default', 'source' => '/there', 'target' => '/x']);
+    redirectRule(['source' => '/everywhere', 'target' => '/x']);
+    redirectRule(['site' => 'cothinking', 'source' => '/here', 'target' => '/x']);
+    redirectRule(['site' => 'default', 'source' => '/there', 'target' => '/x']);
     MissingPath::query()->create(['site' => 'default', 'path' => '/lost', 'first_seen_at' => now(), 'last_seen_at' => now()]);
     MissingPath::query()->create(['site' => 'cothinking', 'path' => '/gone', 'first_seen_at' => now(), 'last_seen_at' => now()]);
     Report::query()->create(['site' => 'default', 'settings' => [], 'status' => Report::DONE, 'score' => 50, 'summary' => ['scored' => 1]]);
@@ -458,7 +459,7 @@ test('the overview and the dashboard widget are of the site selected in the cont
 
     expect($props['report'])->toBeNull()
         ->and(collect($props['notFound'])->pluck('path')->all())->toBe(['/gone']);
-});
+})->group('redirects');
 
 describe('the control panel preview and share cards', function () {
     beforeEach(function () {

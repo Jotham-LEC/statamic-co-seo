@@ -8,7 +8,35 @@ Version 1.0 drops what keeps sites set up for older versions working. Before you
 - **A `config/marketing-toolkit.php` published up to 0.19.** Its old keys (`tracking.gtm`, `tracking.ga4`, `tracking.meta_pixel`, `tracking.linkedin`, and `robots_txt`, `llms_txt` or `ads_txt` set to `true` or `false`) are read in today's names until 1.0 (`src/Legacy/OldConfig.php`). Rename them as the addon's own config file names them now.
 - **The `marketing-toolkit.class` config key.** Bind your `SiteSeo` subclass in a service provider instead (see [developers.md](developers.md)).
 - **Co-SEO's addon settings** (`resources/addons/seo.yaml`, or its `addon_settings` row) are copied to Marketing Toolkit's by a migration until 1.0 (`src/Legacy/CoSeoSettings.php`). Run `php artisan migrate` on 0.x first.
+- **The static helpers on `Redirects\Redirect`** (`normalize()`, `normalizeTarget()`, `ignoresCase()`, `key()`, `pointsBack()`, `validator()`, `rules()`, `messages()`, and the `STATUSES` and `MAX_SOURCE` constants) and **`Matcher::flushAfter()`**. Use the same names on `Redirects\Rule`, and `RedirectRepository::batch()` (see [developers.md](developers.md#redirects-404s-and-reports-from-code)). The `Redirect` model itself stays, as the Eloquent driver's.
 - **Update scripts for sites coming from before 0.21.** `RenameFromSeo`, `MoveToMarketingSettings`, `DropFieldDescriptions` and `KeepSiteNameInTitles` move a site's files and settings from older versions. Run `composer update` to the last 0.x release (or `php please updates:run 0.17.0 --package=jotham-lec/statamic-marketing-toolkit` from Co-SEO) and commit what they change.
+
+## From 0.28: redirects in files
+
+Redirect rules can now live in YAML files in `content/redirects/`, committed with the site, and that is the default for new sites (see [configuration.md](configuration.md#where-redirects-are-kept)). **Updating changes nothing by itself**: while `content/redirects/` doesn't exist and the `mt_redirects` table has rows, the addon keeps reading and writing the database, and the Redirects screen says so. Run `php artisan migrate` as usual: it adds the `mt_redirect_hits` table, where hits are counted for rules in files.
+
+### To move a site's redirects into files
+
+1. Require `^0.29.0` and run `php artisan migrate`.
+2. Run `php please mt:export-redirects` against the database that holds the live rules: on the production server, or locally on a copy of the production database. It writes `content/redirects/all.yaml` (and a `{site}.yaml` per site on a multisite), each rule keeping its database id, and copies the hit counts into `mt_redirect_hits`.
+3. Commit `content/redirects/` and deploy. The folder now exists, so the files are used from then on, everywhere.
+4. If you exported from a copy, run `php please mt:export-redirects --hits-only` once on production after the deploy. It writes no file; it carries production's counts into `mt_redirect_hits` for the rules in the files.
+
+`MT_REDIRECTS_DRIVER=file` is the default, so `.env` needs nothing. The rows in `mt_redirects` stay where they are, unused; the table stays too, as your own migrations may write to it (such writes go to the database whatever the driver).
+
+Once the rules are files, a redirect saved in the control panel of a deployed site is written into that release, and lost on the next deploy unless you use Statamic's Git automation, as for entries. A site whose editors add redirects on the live site, without Git automation, is better off staying on the database.
+
+### To stay on the database
+
+Set `MT_REDIRECTS_DRIVER=eloquent` in `.env` (or `'driver' => 'eloquent'` under `redirects` in `config/marketing-toolkit.php`). Nothing else changes.
+
+### To move from files back to the database
+
+Run `php please mt:import-redirects`, then set `MT_REDIRECTS_DRIVER=eloquent`. It refuses while `mt_redirects` has rows, unless given `--force`.
+
+### For developers
+
+Code that queried the `Redirect` model to read rules should ask `app(JothamLec\MarketingToolkit\Redirects\RedirectRepository::class)` instead, which answers for either driver with `Rule` objects. Rule ids are strings now (a number as a string in the database, a UUID in files), and so is the `id` that `Matcher::match()` returns. The model's static helpers are deprecated in favour of the same ones on `Rule`.
 
 ## From 0.22: Brand fields, and one row per address
 

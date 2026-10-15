@@ -170,6 +170,19 @@ return [
         'imported' => ':created added and :updated updated.',
         'skipped' => ':summary Some rows were skipped (:count in all). :errors',
         'import_failed' => 'The file could not be imported.',
+        'in_database' => 'One redirect is still in the database, so the redirects are read from there. Run `php please mt:export-redirects` to move them into files, or set MT_REDIRECTS_DRIVER=eloquent to keep them in the database.|:count redirects are still in the database, so the redirects are read from there. Run `php please mt:export-redirects` to move them into files, or set MT_REDIRECTS_DRIVER=eloquent to keep them in the database.',
+        'commit_saved' => 'Redirect saved',
+        'commit_deleted' => 'Redirect deleted',
+        // What the Redirects screen says about the rule files (the file driver).
+        'files' => [
+            'not_a_list' => 'It is not a list of rules.',
+            'all_handle' => 'A site’s handle is `all`, and all.yaml holds the redirects for every site, so that site’s redirects can’t be kept in files. Rename the site, or set MT_REDIRECTS_DRIVER=eloquent.',
+            'unreadable' => ':file can’t be read, so none of its redirects apply until it is fixed: :error',
+            'unknown_site' => ':file is for a site this install doesn’t have (:site), so its redirects are ignored.',
+            'no_id' => 'One redirect in :file has no id, so it applies but can’t be edited or counted until the file is next saved.|:count redirects in :file have no id, so they apply but can’t be edited or counted until the file is next saved.',
+            'same_source' => ':file has more than one redirect from :source. The first one applies.',
+            'same_id' => ':file has more than one redirect with the id :id. Only the first one can be edited.',
+        ],
     ],
 
     // The columns of the redirects and 404 listings.

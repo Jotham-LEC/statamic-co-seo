@@ -3,10 +3,13 @@
 namespace JothamLec\MarketingToolkit\Redirects;
 
 use Closure;
+use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
+use JothamLec\MarketingToolkit\Redirects\File\RedirectsStore;
 use JothamLec\MarketingToolkit\Support\Sites;
 use Statamic\Facades\Site;
+use Statamic\Facades\Stache;
 use Statamic\Facades\URL;
 
 /**
@@ -20,6 +23,13 @@ use Statamic\Facades\URL;
  * site at example.com/fr/, for example, `/a-propos` means example.com/fr/a-propos. A path is passed in as
  * it was requested (`/fr/a-propos`), and it is matched without the site's folder first and then as it
  * is, so a rule typed with the folder (as it had to be before) keeps working.
+ *
+ * Rules in the database (the Eloquent driver) are cached in the default cache store. Rules in files are
+ * cached in the Stache's store, under a key that includes the app's folder and the rules' folder: each
+ * Deployer release has its own folder, so a release that is still live can't put its rules back in
+ * the cache after the next one cleared it. The cache is flushed when a rule is saved or deleted through
+ * the repository, by `stache:clear` and `stache:warm`, and by flush(), which code that changes rules
+ * another way (or changes `redirects.driver` or `redirects.directory` at run time) calls.
  */
 class Matcher
 {
@@ -32,7 +42,7 @@ class Matcher
     /**
      * @param  string  $path  the path as requested, from the domain's root (with the site's folder)
      * @param  ?string  $site  a site handle, or null for the current site
-     * @return array{id: int, status: int, target: ?string}|null
+     * @return array{id: ?string, status: int, target: ?string}|null
      */
     public function match(string $path, string $query = '', ?string $site = null): ?array
     {
@@ -45,8 +55,8 @@ class Matcher
      * Finds the rule for a path among the given rules, which are the rules that could match it. This
      * avoids reading (or rebuilding) every rule.
      *
-     * @param  iterable<Redirect>  $redirects
-     * @return array{id: int, status: int, target: ?string}|null
+     * @param  iterable<Rule>  $redirects
+     * @return array{id: ?string, status: int, target: ?string}|null
      */
     public function matchAmong(iterable $redirects, string $path, ?string $site = null): ?array
     {
@@ -91,7 +101,7 @@ class Matcher
      *
      * @param  array{exact: array<string, array<string, mixed>>, folded: array<string, array<string, mixed>>, wildcards: list<array<string, mixed>>}  $rules
      * @param  list<string>  $paths
-     * @return array{id: int, status: int, target: ?string}|null
+     * @return array{id: ?string, status: int, target: ?string}|null
      */
     private function matchIn(array $rules, array $paths, string $query): ?array
     {
@@ -99,7 +109,7 @@ class Matcher
             // A source in the exact case requested wins over one that differs only in case, unless
             // only the source in another case is the site's own.
             $exact = $rules['exact'][$path] ?? null;
-            $folded = $rules['folded'][Redirect::key($path)] ?? null;
+            $folded = $rules['folded'][Rule::key($path)] ?? null;
 
             if ($rule = self::pick($exact, $folded)) {
                 return $this->resolved($rule, [], $query);
@@ -133,13 +143,19 @@ class Matcher
             return;
         }
 
+        $files = self::fileKey();
+
         foreach (Sites::handles() as $site) {
-            Cache::forget(self::KEY.':'.$site);
-            Cache::forget(self::KEY.':'.$site.':any-case');
+            foreach (['', ':any-case'] as $case) {
+                Cache::forget(self::KEY.':'.$site.$case);
+                rescue(fn () => Stache::cacheStore()->forget(self::KEY.':'.$files.':'.$site.$case), report: false);
+            }
         }
     }
 
     /**
+     * @deprecated 0.29.0 Use RedirectRepository::batch(), which also writes each rule file once. Removed in 1.0.
+     *
      * Runs $callback, which saves many rules, and flushes the cache once when it is done. The flush happens
      * after the callback's transaction, so a request in between can't cache the old rules.
      *
@@ -167,27 +183,47 @@ class Matcher
      */
     private function rules(string $site): array
     {
-        return Cache::rememberForever(self::KEY.':'.$site.(Redirect::ignoresCase() ? ':any-case' : ''), fn () => self::compile(
-            Redirect::query()->where('active', true)->appliesOn($site)->get(['id', 'site', 'source', 'target', 'status']),
-            $site,
-        ));
+        $repository = app(RedirectRepository::class);
+        $case = Rule::ignoresCase() ? ':any-case' : '';
+
+        if ($repository->driver() === 'file') {
+            // With Statamic's watcher on (locally), a file edited by hand is read again first.
+            Drivers::store()->handleFileChanges();
+            [$cache, $key] = [Stache::cacheStore(), self::KEY.':'.self::fileKey().':'.$site.$case];
+        } else {
+            [$cache, $key] = [Cache::store(), self::KEY.':'.$site.$case];
+        }
+
+        /** @var CacheRepository $cache */
+        return $cache->rememberForever($key, fn () => self::compile($repository->appliesOn($site), $site));
+    }
+
+    /**
+     * Returns the part of the file driver's cache key that tells this app's folder and the rules'
+     * folder apart, such as one Deployer release from the next.
+     */
+    private static function fileKey(): string
+    {
+        return md5(base_path().'|'.RedirectsStore::folder());
     }
 
     /**
      * Compiles the rules into the three forms that match() reads. The `exact` and `folded` maps look a path
      * up directly, and the `wildcards` are tried in turn.
      *
-     * @param  Collection<int, Redirect>  $redirects
+     * @param  Collection<int, Rule>  $redirects
      * @param  ?string  $site  the site they are matched on, whose own rules win over those for every site
      * @return array{exact: array<string, array<string, mixed>>, folded: array<string, array<string, mixed>>, wildcards: list<array<string, mixed>>}
      */
     private static function compile(Collection $redirects, ?string $site = null): array
     {
-        [$wildcards, $exact] = $redirects->partition(fn (Redirect $redirect) => $redirect->isWildcard());
+        // Each rule's place in the list breaks ties: the rule listed first (the oldest row, or the first in its file) wins.
+        $redirects = $redirects->values();
+        [$wildcards, $exact] = $redirects->partition(fn (Rule $redirect) => $redirect->isWildcard());
 
         return [
             'exact' => self::exactMap($exact, $site),
-            'folded' => Redirect::ignoresCase() ? self::foldedMap($exact, $site) : [],
+            'folded' => Rule::ignoresCase() ? self::foldedMap($exact, $site) : [],
             'wildcards' => self::wildcardList($wildcards, $site),
         ];
     }
@@ -197,15 +233,15 @@ class Matcher
      * `['/old-page' => rule, '/about' => rule]`. Where a rule for every site and the site's own rule
      * share a source, the site's own rule is added last, so it is the one that is kept.
      *
-     * @param  Collection<int, Redirect>  $redirects
+     * @param  Collection<int, Rule>  $redirects
      * @return array<string, array<string, mixed>>
      */
     private static function exactMap(Collection $redirects, ?string $site): array
     {
         return $redirects
-            ->sortBy(fn (Redirect $redirect) => self::isOwn($redirect, $site))
+            ->sortBy(fn (Rule $redirect, int $place) => [self::isOwn($redirect, $site), -$place])
             // We normalise the source again for sources that were saved before they were decoded on save.
-            ->mapWithKeys(fn (Redirect $redirect) => [Redirect::normalize($redirect->source) => self::rule($redirect, $site)])
+            ->mapWithKeys(fn (Rule $redirect) => [Rule::normalize($redirect->source) => self::rule($redirect, $site)])
             ->all();
     }
 
@@ -215,14 +251,14 @@ class Matcher
      * (saved before case was ignored), the oldest is kept, and the site's own rule wins over a rule for
      * every site.
      *
-     * @param  Collection<int, Redirect>  $redirects
+     * @param  Collection<int, Rule>  $redirects
      * @return array<string, array<string, mixed>>
      */
     private static function foldedMap(Collection $redirects, ?string $site): array
     {
         return $redirects
-            ->sortBy(fn (Redirect $redirect) => [self::isOwn($redirect, $site), -$redirect->id])
-            ->mapWithKeys(fn (Redirect $redirect) => [Redirect::key(Redirect::normalize($redirect->source)) => self::rule($redirect, $site)])
+            ->sortBy(fn (Rule $redirect, int $place) => [self::isOwn($redirect, $site), -$place])
+            ->mapWithKeys(fn (Rule $redirect) => [Rule::key(Rule::normalize($redirect->source)) => self::rule($redirect, $site)])
             ->all();
     }
 
@@ -233,18 +269,18 @@ class Matcher
      * backwards (see pattern()). Read backwards, `/blog/hello` is `olleh/golb/`, which matches with
      * `olleh`, so `$1` is `hello`.
      *
-     * @param  Collection<int, Redirect>  $redirects
+     * @param  Collection<int, Rule>  $redirects
      * @return list<array<string, mixed>>
      */
     private static function wildcardList(Collection $redirects, ?string $site): array
     {
-        $ignoresCase = Redirect::ignoresCase();
+        $ignoresCase = Rule::ignoresCase();
 
         return $redirects
-            ->sortByDesc(fn (Redirect $redirect) => [strlen($redirect->source), self::isOwn($redirect, $site)])
-            ->map(fn (Redirect $redirect) => [
+            ->sortByDesc(fn (Rule $redirect) => [strlen($redirect->source), self::isOwn($redirect, $site)])
+            ->map(fn (Rule $redirect) => [
                 ...self::rule($redirect, $site),
-                ...self::pattern(Redirect::normalize($redirect->source), $ignoresCase),
+                ...self::pattern(Rule::normalize($redirect->source), $ignoresCase),
             ])
             ->values()
             ->all();
@@ -254,14 +290,14 @@ class Matcher
      * Returns the parts of a rule that the matcher keeps. The `own` value is 1 for a rule of the site it is
      * matched on, and 0 for a rule for every site.
      *
-     * @return array{id: int, status: int, target: ?string, own: int}
+     * @return array{id: ?string, status: int, target: ?string, own: int}
      */
-    private static function rule(Redirect $redirect, ?string $site): array
+    private static function rule(Rule $redirect, ?string $site): array
     {
         return ['id' => $redirect->id, 'status' => $redirect->status, 'target' => $redirect->target, 'own' => self::isOwn($redirect, $site)];
     }
 
-    private static function isOwn(Redirect $redirect, ?string $site): int
+    private static function isOwn(Rule $redirect, ?string $site): int
     {
         return $site !== null && $redirect->site === $site ? 1 : 0;
     }
@@ -307,7 +343,7 @@ class Matcher
     /**
      * @param  array<string, mixed>  $rule
      * @param  list<string>  $captures
-     * @return array{id: int, status: int, target: ?string}
+     * @return array{id: ?string, status: int, target: ?string}
      */
     private function resolved(array $rule, array $captures, string $query): array
     {

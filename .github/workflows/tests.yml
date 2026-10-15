@@ -56,6 +56,15 @@ jobs:
           DB_USERNAME: postgres
           DB_PASSWORD: postgres
 
+      # The redirect suites again, with rules in files rather than the database.
+      - name: Tests (redirects in files)
+        run: vendor/bin/pest --display-warnings --fail-on-warning --group=redirects ${{ matrix.db == 'sqlite' && '--parallel' || '' }}
+        env:
+          MT_TEST_REDIRECTS: file
+          MT_TEST_DB: ${{ matrix.db == 'pgsql' && 'pgsql' || '' }}
+          DB_USERNAME: postgres
+          DB_PASSWORD: postgres
+
   quality:
     name: Pint, PHPStan, built assets
     runs-on: ubuntu-latest

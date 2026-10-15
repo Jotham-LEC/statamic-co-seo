@@ -8,7 +8,8 @@ use Illuminate\Support\Number;
 use Illuminate\Support\Str;
 use JothamLec\MarketingToolkit\NotFound\MissingPath;
 use JothamLec\MarketingToolkit\Preview\MetaPayload;
-use JothamLec\MarketingToolkit\Redirects\Redirect;
+use JothamLec\MarketingToolkit\Redirects\RedirectRepository;
+use JothamLec\MarketingToolkit\Redirects\Rule;
 use JothamLec\MarketingToolkit\Reports\Report;
 use JothamLec\MarketingToolkit\Reports\ReportPage;
 use JothamLec\MarketingToolkit\Reports\Result;
@@ -387,12 +388,13 @@ final class PageData
 
         return [
             'messages' => $messages,
-            'to_here' => $toHere->take(5)->map(fn (Redirect $redirect) => [
+            'to_here' => $toHere->take(5)->map(fn (Rule $redirect) => [
                 'source' => $redirect->source,
                 'hits' => $redirect->hits,
-                'url' => $this->cp(cp_route('mt.redirects.edit', $redirect)),
+                // A rule typed into a file without an id has no edit form of its own yet, so it links to the list.
+                'url' => $this->cp($redirect->id === null ? cp_route('mt.redirects.index') : cp_route('mt.redirects.edit', $redirect->id)),
             ])->values()->all(),
-            'ignored' => $ignored ? ['source' => $ignored->source, 'url' => $this->cp(cp_route('mt.redirects.edit', $ignored))] : null,
+            'ignored' => $ignored ? ['source' => $ignored->source, 'url' => $this->cp($ignored->id === null ? cp_route('mt.redirects.index') : cp_route('mt.redirects.edit', $ignored->id))] : null,
             'create_url' => $manage && $missing
                 ? $this->cp(cp_route('mt.redirects.create', array_filter(['source' => $this->path, 'site' => Sites::scope($handle)])))
                 : null,
@@ -403,30 +405,27 @@ final class PageData
      * Finds the active rules on this site whose target is this page, either by its
      * path on the site (as rules store targets) or by its full address.
      *
-     * @return Collection<int, Redirect>
+     * @return Collection<int, Rule>
      */
     private function redirectsHere()
     {
         $url = (string) ($this->content?->absoluteUrl() ?? strtok($this->url, '?#'));
-        $relative = Redirect::normalizeTarget('/'.ltrim((string) $this->site->relativePath($url), '/'));
+        $relative = Rule::normalizeTarget('/'.ltrim((string) $this->site->relativePath($url), '/'));
 
-        return Redirect::query()
-            ->where('active', true)
-            ->when(Sites::multiple(), fn ($query) => $query->appliesOn($this->site->handle()))
-            ->whereIn('target', array_values(array_unique(array_filter([$relative, $url, rtrim($url, '/'), rtrim($url, '/').'/']))))
-            ->orderByDesc('hits')
-            ->get()
-            ->filter(fn (Redirect $redirect) => $redirect->isAccessible())
+        return app(RedirectRepository::class)
+            ->pointingTo(array_values(array_unique(array_filter([$relative, $url, rtrim($url, '/'), rtrim($url, '/').'/']))), Sites::multiple() ? $this->site->handle() : null)
+            ->filter(fn (Rule $redirect) => $redirect->isAccessible())
             ->values();
     }
 
     /**
      * Finds an active rule from this address, which never applies while a page is here.
      */
-    private function redirectFromHere(): ?Redirect
+    private function redirectFromHere(): ?Rule
     {
-        $rule = Redirect::forSource($this->path, site: Sites::scope($this->site->handle()))
-            ?? (Sites::multiple() ? Redirect::forSource($this->path) : null);
+        $repository = app(RedirectRepository::class);
+        $rule = $repository->forSource($this->path, Sites::scope($this->site->handle()))
+            ?? (Sites::multiple() ? $repository->forSource($this->path) : null);
 
         return $rule && $rule->active && $rule->isAccessible() ? $rule : null;
     }

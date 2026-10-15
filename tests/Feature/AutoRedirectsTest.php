@@ -2,19 +2,21 @@
 
 use Illuminate\Support\Facades\Event;
 use JothamLec\MarketingToolkit\Redirects\AutoRedirects;
-use JothamLec\MarketingToolkit\Redirects\Redirect;
 use Statamic\Events\EntrySaving;
 use Statamic\Facades\Collection;
 use Statamic\Facades\Entry;
 use Statamic\Facades\Taxonomy;
 use Statamic\Facades\Term;
 
+// These run on both drivers: composer test runs the group again on files (MT_TEST_REDIRECTS=file).
+pest()->group('redirects');
+
 /**
  * @return array<string, string> source => target
  */
 function redirectMap(): array
 {
-    return Redirect::query()->orderBy('source')->pluck('target', 'source')->all();
+    return redirectRules()->sortBy('source')->pluck('target', 'source')->all();
 }
 
 /**
@@ -31,9 +33,9 @@ test('a changed slug leaves a marked 301 behind', function () {
 
     $entry->slug('on-slow-reading')->save();
 
-    $redirect = Redirect::query()->sole();
+    $redirect = redirectRules()->sole();
 
-    expect($redirect->only(['source', 'target', 'status', 'active', 'automatic']))->toBe([
+    expect(collect($redirect->toArray())->only(['source', 'target', 'status', 'active', 'automatic'])->all())->toBe([
         'source' => '/essays/on-reading', 'target' => '/essays/on-slow-reading', 'status' => 301, 'active' => true, 'automatic' => true,
     ]);
 
@@ -88,7 +90,7 @@ test('moving back drops the rule out of the live address instead of looping', fu
 });
 
 test('a manual rule into the old address follows the content too', function () {
-    Redirect::query()->create(['source' => '/legacy', 'target' => '/a']);
+    redirectRule(['source' => '/legacy', 'target' => '/a']);
     $entry = reloaded(entryIn('pages', 'a'));
 
     $entry->slug('b')->save();
@@ -98,7 +100,7 @@ test('a manual rule into the old address follows the content too', function () {
 
 test('with case_sensitive off, the rule from the old address in another case is the one updated', function () {
     config(['marketing-toolkit.redirects.case_sensitive' => false]);
-    Redirect::query()->create(['source' => '/About', 'target' => '/elsewhere']);
+    redirectRule(['source' => '/About', 'target' => '/elsewhere']);
     $entry = reloaded(entryIn('pages', 'about'));
 
     $entry->slug('company')->save();
@@ -107,8 +109,8 @@ test('with case_sensitive off, the rule from the old address in another case is 
 });
 
 test('a rule into a similar-looking address is left alone', function () {
-    Redirect::query()->create(['source' => '/legacy', 'target' => '/a_b/x']);
-    Redirect::query()->create(['source' => '/other', 'target' => '/aXb/y']);
+    redirectRule(['source' => '/legacy', 'target' => '/a_b/x']);
+    redirectRule(['source' => '/other', 'target' => '/aXb/y']);
     $entry = reloaded(entryIn('pages', 'a_b'));
 
     $entry->slug('c')->save();
@@ -220,7 +222,7 @@ test('automatic redirects can be turned off', function () {
 });
 
 test('a manual wildcard under the new address is kept', function () {
-    Redirect::query()->create(['source' => '/shop/*', 'target' => 'https://store.example.com/$1']);
+    redirectRule(['source' => '/shop/*', 'target' => 'https://store.example.com/$1']);
 
     reloaded(entryIn('pages', 'store'))->slug('shop')->save();
 
@@ -228,7 +230,7 @@ test('a manual wildcard under the new address is kept', function () {
 });
 
 test('a wildcard that would come to point at itself is dropped', function () {
-    Redirect::query()->create(['source' => '/x/*', 'target' => '/old/$1']);
+    redirectRule(['source' => '/x/*', 'target' => '/old/$1']);
 
     reloaded(entryIn('pages', 'old'))->slug('x')->save();
 

@@ -36,9 +36,16 @@
         "pestphp/pest": "^4.0"
     },
     "scripts": {
-        "test": "pest --parallel",
+        "test": [
+            "pest --parallel",
+            "@test:files"
+        ],
         "lint": "pint --test",
-        "analyse": "phpstan analyse --memory-limit=1G"
+        "analyse": "phpstan analyse --memory-limit=1G",
+        "test:files": [
+            "@putenv MT_TEST_REDIRECTS=file",
+            "pest --parallel --group=redirects"
+        ]
     },
     "config": {
         "allow-plugins": {

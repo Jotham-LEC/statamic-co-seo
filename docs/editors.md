@@ -77,6 +77,8 @@ The Reports screen has two tabs, **Reports** and **Settings**. The Settings tab 
 
 A redirect only applies when its address doesn't exist as a page. If you bring a page back at an old address, the page shows, not the redirect.
 
+Redirects are usually kept in files that your developer commits with the site. A note at the top of the screen says when something needs their attention: redirects still kept in the database, or a file that can't be read. On some sites, redirects added here on the live site don't survive the next update of the site; ask your developer whether yours is one.
+
 ## 404s
 
 A **404** is what visitors get when they ask for an address that doesn't exist. **Marketing → 404s** lists the ones real visitors hit, most recent first, with how often and the last page that linked there. Bots and hacking attempts are left out.

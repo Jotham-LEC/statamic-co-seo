@@ -8,7 +8,7 @@ From nothing to a site with meta tags, a sitemap, share cards, redirects and rep
 
 - **Statamic 6.34+** (Core is enough) on **PHP 8.3+**, with the PHP extensions in [the README's requirements](../README.md#requirements). Several sites and languages need Statamic Pro, as Statamic itself does; see [Several sites and languages](developers.md#several-sites-and-languages).
 - **PHP's `imagick` extension** for the generated share cards. Without it pages use their uploaded or default share image instead of a card, and favicons are drawn with `gd`, from a PNG or JPEG only; everything else works.
-- **A database** Laravel can migrate. Redirects, the 404 log and reports live in tables, even on a flat-file site; SQLite is fine.
+- **A database** Laravel can migrate. The 404 log, reports and redirect hit counts live in tables, even on a flat-file site; SQLite is fine. Redirect rules are files in `content/redirects/` by default (or a table; see [configuration.md](configuration.md#where-redirects-are-kept)).
 - **A cache store that serializes**: `file`, `redis`, `database` or `memcached`. Not `array`: automatic redirects need to compare an entry with the copy loaded before it was edited, and the `array` store hands back the same object.
 
 Everything is included: Marketing Toolkit is free and open source, with no editions and no licence key.
@@ -17,7 +17,7 @@ Everything is included: Marketing Toolkit is free and open source, with no editi
 
 ```bash
 composer require jotham-lec/statamic-marketing-toolkit
-php artisan migrate                          # mt_redirects, mt_404s, mt_reports, mt_report_pages, mt_search_stats
+php artisan migrate                          # mt_redirects, mt_redirect_hits, mt_404s, mt_reports, mt_report_pages, mt_search_stats
 php please mt:install                       # the "Brand" and "Marketing settings" global sets
 php artisan vendor:publish --tag=marketing-toolkit-config  # optional: config/marketing-toolkit.php, to change the defaults
 ```

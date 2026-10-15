@@ -196,7 +196,10 @@ return [
     |--------------------------------------------------------------------------
     |
     | Redirect rules are managed under Marketing → Redirects, and they apply
-    | only to addresses the site would answer with a 404. `automatic` adds a
+    | only to addresses the site would answer with a 404. `driver` says where
+    | they are kept: `file` (YAML in `directory`, one file per site, committed
+    | with the site) or `eloquent` (the mt_redirects table). Hits are counted
+    | in the database either way. See docs/configuration.md. `automatic` adds a
     | 301 when an entry's or a term's address changes (its slug, its date, or
     | its place in a tree). Setting `case_sensitive` to false matches a rule's
     | From in any letter case (`/ABOUT-US` as `/about-us`), which helps a site
@@ -206,6 +209,10 @@ return [
 
     'redirects' => [
         'enabled' => true,
+
+        'driver' => env('MT_REDIRECTS_DRIVER', 'file'),
+
+        'directory' => base_path('content/redirects'),
 
         'automatic' => true,
 

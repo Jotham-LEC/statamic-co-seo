@@ -4,7 +4,7 @@ namespace JothamLec\MarketingToolkit\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 use JothamLec\MarketingToolkit\Redirects\Campaign;
-use JothamLec\MarketingToolkit\Redirects\Redirect;
+use JothamLec\MarketingToolkit\Redirects\Rule;
 use JothamLec\MarketingToolkit\Support\Sites;
 use Statamic\Facades\Blueprint;
 use Statamic\Fields\Blueprint as BlueprintObject;
@@ -47,10 +47,10 @@ final class SaveRedirect extends FormRequest
     {
         $redirect = $this->route('redirect');
 
-        return Redirect::rules(
+        return Rule::rules(
             (string) $this->input('source'),
             $this->input('site'),
-            ignoreId: $redirect instanceof Redirect ? $redirect->id : null,
+            ignoreId: is_string($redirect) ? $redirect : null,
             sites: Sites::accessible(),
         );
     }
@@ -60,7 +60,7 @@ final class SaveRedirect extends FormRequest
      */
     public function messages(): array
     {
-        return Redirect::messages();
+        return Rule::messages();
     }
 
     public static function blueprint(): BlueprintObject

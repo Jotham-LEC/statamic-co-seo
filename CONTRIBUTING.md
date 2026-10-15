@@ -3,7 +3,7 @@
 ```bash
 composer install && npm install
 npm run build      # Vue → resources/dist/build; commit the build, sites don't run npm
-composer test      # Pest, in parallel (about half a minute); the share-card tests skip without PHP's imagick extension
+composer test      # Pest, in parallel (about a minute), then the redirect suites again on files; the share-card tests skip without PHP's imagick extension
 composer lint      # Pint; `vendor/bin/pint` fixes what it finds
 composer analyse   # Larastan, level 6, with the 1 GB it needs; phpstan.neon says why each ignored error is ignored
 ```
@@ -27,7 +27,7 @@ Everything is under `src/`, in the `JothamLec\MarketingToolkit` namespace.
 | `Tags/Mt.php` | The `mt` tag: `<s:mt:head />`, `<s:mt:body />` and the rest. |
 | `Sitemap/`, `TextFiles/` | The sitemap's URLs, and robots.txt, llms.txt and ads.txt. |
 | `Http/` | Controllers for the public files and the control panel, the middleware, and form requests. |
-| `Redirects/`, `NotFound/`, `Rules/` | Redirect rules and how a path is matched, the 404 log, and the validation rules for a redirect. |
+| `Redirects/`, `NotFound/`, `Rules/` | Redirect rules (`Rule`), where they are kept (`RedirectRepository`, with a driver in `File/` and one in `Eloquent/`, chosen by `Drivers`) and how a path is matched, the 404 log, and the validation rules for a redirect. |
 | `Reports/` | Site reports: the runner, the page renderer, the HTML reader, and one class per check in `Reports/Rules/`. |
 | `Toolbar/` | The front-end toolbar's cookie, guard script and page data. |
 | `Tracking/`, `Conversions/` | Tracking tags and Consent Mode; leads and where they came from. |
@@ -56,6 +56,8 @@ Every test is in `tests/Feature`, one file per area; `tests/Pest.php` sets up a 
 - Blueprints, forms and global sets are files that outlive a test: delete what a test creates, or give it a handle no other test uses.
 - Each parallel process gets its own copy of Testbench's skeleton in `/tmp/marketing-toolkit-tests`, so a test may write to `public/` or `resources/`.
 - The blueprints are YAML, so they repeat lists the code owns (the report checks and their defaults, the Features switches, the tracking ID patterns). `BlueprintsTest` fails when the two disagree: change both.
+
+The redirect suites (the `redirects` group) run on the database driver; `MT_TEST_REDIRECTS=file vendor/bin/pest --group=redirects` runs them on files, as `composer test` does after the full suite. Tests that save a rule go through the helpers in `tests/Pest.php` (`redirectRule()`, `freshRule()`, `storedRule()`…), not the `Redirect` model, so they run on both.
 
 The suite runs on SQLite. To run it on Postgres, point it at an empty database: `MT_TEST_DB=pgsql DB_PORT=5432 DB_DATABASE=mt_test vendor/bin/pest` (also `DB_HOST`, `DB_USERNAME`, `DB_PASSWORD`; not in parallel, as the processes would share the database). GitHub Actions runs all of this on every push: PHP 8.3 on the oldest versions composer.json allows, PHP 8.4 on the newest, Postgres, and without Imagick, plus `composer validate`, Pint, PHPStan and the build.
 

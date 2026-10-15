@@ -7,7 +7,8 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use JothamLec\MarketingToolkit\NotFound\Recorder;
 use JothamLec\MarketingToolkit\Redirects\Matcher;
-use JothamLec\MarketingToolkit\Redirects\Redirect;
+use JothamLec\MarketingToolkit\Redirects\RedirectRepository;
+use JothamLec\MarketingToolkit\Redirects\Rule;
 use JothamLec\MarketingToolkit\Support\Features;
 use JothamLec\MarketingToolkit\Support\Sites;
 use JothamLec\MarketingToolkit\Support\StatamicRoutes;
@@ -46,13 +47,13 @@ final class HandleMissing
         $site = Site::current();
         // The path is taken as requested, from the domain's root, because the matcher removes the site's folder itself.
         $path = '/'.trim($request->decodedPath(), '/');
-        // The lookup reads the rules table. If the table is missing (the addon is installed, but `migrate`
-        // hasn't run yet) or the lookup fails, the error is reported and the address answers its 404 as
-        // before, rather than a 500.
+        // The lookup reads the rules (from the cache, or else from their files or table). If the table is
+        // missing (`migrate` hasn't run yet) or the lookup fails, the error is reported and the address
+        // answers its 404 as before, rather than a 500.
         $rule = Features::on('redirects') ? rescue(fn () => $this->matcher->match($path, (string) $request->getQueryString(), $site->handle()), null) : null;
 
         // A rule back to the requested address would loop, so we treat the address as simply missing.
-        if ($rule && $rule['target'] !== null && str_starts_with($rule['target'], '/') && Redirect::normalize(self::fromRoot($rule['target'], $site)) === $path) {
+        if ($rule && $rule['target'] !== null && str_starts_with($rule['target'], '/') && Rule::normalize(self::fromRoot($rule['target'], $site)) === $path) {
             $rule = null;
         }
 
@@ -114,8 +115,9 @@ final class HandleMissing
     public function terminate(Request $request, Response $response): void
     {
         // This bookkeeping runs after the response has gone out, so a failure is reported rather than thrown.
+        // The count goes to the database whichever driver keeps the rules: a visit never writes a file.
         if ($id = $request->attributes->get('mt.redirect_hit')) {
-            rescue(fn () => Redirect::query()->whereKey($id)->increment('hits', 1, ['last_hit_at' => now()]));
+            rescue(fn () => app(RedirectRepository::class)->recordHit((string) $id));
         }
 
         if ($request->attributes->get('mt.record_missing')) {

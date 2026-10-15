@@ -4,7 +4,7 @@ namespace JothamLec\MarketingToolkit\Boost\Tools;
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use JothamLec\MarketingToolkit\Redirects\Matcher;
-use JothamLec\MarketingToolkit\Redirects\Redirect;
+use JothamLec\MarketingToolkit\Redirects\RedirectRepository;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Tool;
@@ -39,7 +39,7 @@ class MarketingToolkitRedirect extends Tool
             return Response::text("No redirect answers {$path} on the site [{$site}].");
         }
 
-        $rule = Redirect::query()->find($match['id']);
+        $rule = $match['id'] === null ? null : app(RedirectRepository::class)->find((string) $match['id']);
 
         return Response::json([
             'status' => $match['status'],

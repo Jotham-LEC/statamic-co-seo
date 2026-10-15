@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+Redirect rules can live in files committed with the site, and new sites keep them there.
+
+### Added
+- **Redirect rules in files.** With `redirects.driver` set to `file`, the default for new sites, the rules are YAML files in `content/redirects/` (`redirects.directory`): `all.yaml` for every site, and `{site}.yaml` for a site's own on a multisite. They are committed and deployed with the site, like its entries, and Marketing → Redirects reads and writes them as before. Hits are counted in a new table, `mt_redirect_hits`, so a visit never writes a file. `stache:clear` and `stache:warm` read the files afresh, and the compiled rules are cached per release, so a Deployer deploy needs nothing more. With Statamic's Git automation on, saving or deleting a redirect commits the files. A file edited by hand works; the Redirects screen names a file that doesn't parse, two rules from one address, or a rule without an id. See [configuration.md](docs/configuration.md#where-redirects-are-kept).
+- **`php please mt:export-redirects` and `php please mt:import-redirects`.** The first copies the rules in the database into files, each keeping its id, and their hits into `mt_redirect_hits`; `--hits-only` copies only the hits, for a site that exported from a copy of its production database. The second copies files into the database. Both refuse to overwrite without `--force`. See [configuration.md](docs/configuration.md#commands).
+- **A repository for redirects in code.** `app(RedirectRepository::class)` reads and saves `Rule` objects on whichever driver the site uses, and `batch()` saves many at once. `RedirectSaved` and `RedirectDeleted` events fire on both. See [developers.md](docs/developers.md#redirects-404s-and-reports-from-code).
+
+### Changed
+- **Files are the default place for redirects, with a safety net for existing sites.** While `content/redirects/` doesn't exist and the `mt_redirects` table has rows, the addon keeps reading and writing the database, and the Redirects screen says how many rules are still there. `MT_REDIRECTS_DRIVER=eloquent` keeps the database for good.
+- **Redirect ids are strings.** A rule in the database keeps its number, as a string; a rule made in files has a UUID. `Matcher::match()` returns the id as a string, and the control panel's redirect addresses take either.
+
+### Upgrading
+- **Nothing changes until you export.** Run `php artisan migrate` (it adds `mt_redirect_hits`). While `content/redirects/` doesn't exist, the rules already in the database stay in use, and new ones are saved there too.
+- **Moving a site's redirects into files takes one export.** Require `^0.29.0`, run `php please mt:export-redirects` against the production database (on the server, or locally on a copy of it), commit `content/redirects/` and deploy. If you exported from a copy, run `php please mt:export-redirects --hits-only` once in production after the deploy, to carry over the hits counted since. `.env` needs nothing: `file` is the default. A redirect saved in the control panel of a deployed site is then written into that release, as an entry is, so it lasts only with Statamic's Git automation; see [upgrading.md](docs/upgrading.md#from-028-redirects-in-files).
+- **A site can stay on the database.** Set `MT_REDIRECTS_DRIVER=eloquent` in `.env`, and nothing else changes.
+- **For developers:** the static helpers on the `Redirect` model (`normalize()`, `validator()`, `rules()` and the rest) and `Matcher::flushAfter()` are deprecated, for the same names on `Rule` and `RedirectRepository::batch()`; they go in 1.0. The `Redirect` model and its `mt_redirects` table stay as they are, and writing through the model still writes the database whatever the driver, so a site's own migrations that insert rules keep working.
+
 ## 0.28.0 – 2026-10-15
 
 ### Added

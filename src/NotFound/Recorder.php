@@ -6,7 +6,7 @@ use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use JothamLec\MarketingToolkit\Redirects\Redirect;
+use JothamLec\MarketingToolkit\Redirects\Rule;
 use JothamLec\MarketingToolkit\Support\Features;
 use JothamLec\MarketingToolkit\Support\Sites;
 use Statamic\Facades\Site;
@@ -46,7 +46,7 @@ class Recorder
     {
         $path = $this->path($request);
 
-        if (strlen($path) > Redirect::MAX_SOURCE) {
+        if (strlen($path) > Rule::MAX_SOURCE) {
             return;
         }
 

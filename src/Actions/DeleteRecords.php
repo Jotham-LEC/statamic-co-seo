@@ -4,7 +4,8 @@ namespace JothamLec\MarketingToolkit\Actions;
 
 use Illuminate\Support\Collection;
 use JothamLec\MarketingToolkit\NotFound\MissingPath;
-use JothamLec\MarketingToolkit\Redirects\Redirect;
+use JothamLec\MarketingToolkit\Redirects\RedirectRepository;
+use JothamLec\MarketingToolkit\Redirects\Rule;
 use JothamLec\MarketingToolkit\Support\Permissions;
 use Statamic\Actions\Action;
 use Statamic\Contracts\Auth\User;
@@ -29,7 +30,7 @@ final class DeleteRecords extends Action
      */
     public function visibleTo($item)
     {
-        return $item instanceof Redirect || $item instanceof MissingPath;
+        return $item instanceof Rule || $item instanceof MissingPath;
     }
 
     /**
@@ -57,13 +58,15 @@ final class DeleteRecords extends Action
     }
 
     /**
-     * @param  Collection<int, Redirect|MissingPath>  $items
+     * @param  Collection<int, Rule|MissingPath>  $items
      * @param  array<string, mixed>  $values
      * @return void
      */
     public function run($items, $values)
     {
-        // The items are deleted one by one, so that each redirect's model events clear the cached rules.
-        $items->each->delete();
+        $repository = app(RedirectRepository::class);
+
+        // Redirects are deleted in one batch, which writes each rule file once and flushes the cached rules.
+        $repository->batch(fn () => $items->each(fn (Rule|MissingPath $item) => $item instanceof Rule ? $repository->delete($item) : $item->delete()));
     }
 }

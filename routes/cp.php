@@ -25,9 +25,10 @@ Route::name('mt.')->prefix('marketing-toolkit')->group(function () {
         Route::get('redirects/listing', [RedirectsController::class, 'listing'])->name('redirects.listing');
         Route::get('redirects/create', [RedirectsController::class, 'create'])->name('redirects.create');
         Route::post('redirects', [RedirectsController::class, 'store'])->name('redirects.store');
-        Route::get('redirects/{redirect}', [RedirectsController::class, 'edit'])->whereNumber('redirect')->name('redirects.edit');
-        Route::patch('redirects/{redirect}', [RedirectsController::class, 'update'])->whereNumber('redirect')->name('redirects.update');
         Route::get('redirects/export', [RedirectsController::class, 'export'])->name('redirects.export');
+        // A rule's id is a number in the database and a UUID in files, so the routes above come first.
+        Route::get('redirects/{redirect}', [RedirectsController::class, 'edit'])->name('redirects.edit');
+        Route::patch('redirects/{redirect}', [RedirectsController::class, 'update'])->name('redirects.update');
         Route::post('redirects/import', [RedirectsController::class, 'import'])->name('redirects.import');
         Route::post('redirects/choice', [RedirectsController::class, 'choice'])->name('redirects.choice');
     });

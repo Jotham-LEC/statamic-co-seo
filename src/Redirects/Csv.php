@@ -29,12 +29,15 @@ class Csv
 
         fputcsv($out, $sites ? [...self::HEADER, 'site'] : self::HEADER, escape: '');
 
-        // Each address's rule for every site (with no site) comes first, because databases sort a null differently.
-        Redirect::query()->accessible()->orderBy('source')->orderByRaw('site is not null')->orderBy('site')->each(function (Redirect $redirect) use ($out, $sites) {
-            $row = [$redirect->source, $redirect->target, $redirect->status, $redirect->active ? 1 : 0];
+        // Each address's rule for every site (with no site) comes first.
+        app(RedirectRepository::class)->all()
+            ->filter(fn (Rule $rule) => ! $sites || $rule->isAccessible())
+            ->sort(fn (Rule $a, Rule $b) => [$a->source, $a->site !== null, (string) $a->site] <=> [$b->source, $b->site !== null, (string) $b->site])
+            ->each(function (Rule $rule) use ($out, $sites) {
+                $row = [$rule->source, $rule->target, $rule->status, $rule->active ? 1 : 0];
 
-            fputcsv($out, $sites ? [...$row, $redirect->site] : $row, escape: '');
-        });
+                fputcsv($out, $sites ? [...$row, $rule->site] : $row, escape: '');
+            });
     }
 
     /**
@@ -49,19 +52,21 @@ class Csv
         $file->setFlags(SplFileObject::READ_CSV | SplFileObject::SKIP_EMPTY | SplFileObject::READ_AHEAD);
         $file->setCsvControl(',', '"', '');
 
-        return Matcher::flushAfter(fn () => DB::transaction(function () use ($file) {
+        $repository = app(RedirectRepository::class);
+
+        return $repository->batch(function () use ($file, $repository) {
             $result = ['created' => 0, 'updated' => 0, 'errors' => []];
             $sites = Sites::accessible();
             // We read every rule once, rather than for each row and again in its checks. The rules are
             // grouped by site ('' for every site) and by source as rules compare it (case-folded when
             // matching ignores case), oldest first. The active rules, which the loop check follows, are
             // kept apart. Both are kept current as rows are saved, so each row sees the rows before it.
-            $rules = Redirect::query()->orderBy('id')->get();
+            $rules = $repository->all();
             $bySource = [];
             $active = $rules->where('active', true)->keyBy('id');
 
             foreach ($rules as $rule) {
-                $bySource[$rule->site ?? ''][Redirect::key(Redirect::normalize($rule->source))][] = $rule;
+                $bySource[$rule->site ?? ''][Rule::key(Rule::normalize($rule->source))][] = $rule;
             }
 
             $number = 0;
@@ -82,10 +87,10 @@ class Csv
                     'site' => Sites::multiple() ? (($cells[4] ?? '') ?: null) : null,
                 ];
 
-                $key = Redirect::key(Redirect::normalize($row['source']));
+                $key = Rule::key(Rule::normalize($row['source']));
                 $matches = $bySource[$row['site'] ?? ''][$key] ?? [];
                 $existing = $matches[0] ?? null;
-                $validator = Redirect::validator($row, ignoreId: $existing?->id, taken: count($matches) > 1, active: $active, sites: $sites);
+                $validator = Rule::validator($row, ignoreId: $existing?->id, taken: count($matches) > 1, active: $active, sites: $sites);
 
                 if ($validator->fails()) {
                     $result['errors'][] = __('marketing-toolkit::validation.csv_row', ['row' => $number, 'message' => $validator->errors()->first()]);
@@ -95,11 +100,9 @@ class Csv
 
                 try {
                     // Each row gets its own savepoint, because on Postgres a failed statement aborts the
-                    // whole transaction, and the rows before it would be lost with it.
-                    $saved = DB::transaction(fn () => $existing
-                        // An imported rule belongs to the user, just as a rule saved in the form does.
-                        ? tap($existing)->update([...$row, 'automatic' => false])
-                        : Redirect::query()->create($row));
+                    // whole transaction, and the rows before it would be lost with it. An imported rule
+                    // belongs to the user, just as a rule saved in the form does.
+                    $saved = DB::transaction(fn () => $repository->save(($existing ?? new Rule)->fill([...$row, 'automatic' => false])));
                 } catch (QueryException $exception) {
                     report($exception);
                     $result['errors'][] = __('marketing-toolkit::validation.csv_row_failed', ['row' => $number]);
@@ -118,6 +121,6 @@ class Csv
             }
 
             return $result;
-        }));
+        });
     }
 }

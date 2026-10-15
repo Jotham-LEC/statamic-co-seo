@@ -56,7 +56,7 @@ The preview updates as you type, for Google and for shares on Facebook, LinkedIn
 
 - **PHP 8.3+** with `curl` and `dom`, and the `mbstring` and `openssl` that Laravel itself requires.
 - **Statamic 6.34+**. Core is enough; multi-site needs Statamic Pro, as Statamic itself does.
-- **A database** Laravel can migrate, even on a flat-file site, for redirects, the 404 log and reports. SQLite is fine.
+- **A database** Laravel can migrate, even on a flat-file site, for the 404 log, reports and redirect hit counts. SQLite is fine. Redirect rules are YAML files in `content/redirects/`, committed with the site, or a table if you prefer.
 - **A serializing cache store**: `file`, `redis`, `database`, or `memcached`, not `array`. Automatic redirects compare an entry with the copy loaded before it was edited.
 - **`imagick`** for share cards and favicons. Without it, pages use their uploaded share image, and `gd` draws favicons from a PNG or JPEG.
 - **Laravel's scheduler** for scheduled reports and the Search Console import. A queue worker is optional.
@@ -72,7 +72,7 @@ php artisan migrate
 php please mt:install
 ```
 
-`php artisan migrate` creates the `mt_redirects`, `mt_404s`, `mt_reports`, `mt_report_pages` and `mt_search_stats` tables. `mt:install`:
+`php artisan migrate` creates the `mt_redirects`, `mt_redirect_hits`, `mt_404s`, `mt_reports`, `mt_report_pages` and `mt_search_stats` tables. `mt:install`:
 
 - creates the **Brand** and **Marketing settings** global sets and their blueprints, using the first asset container for images (choose another with `--container=`)
 - fills their empty fields with what the site already uses: the home page's description, and the control panel kept out of robots.txt

@@ -116,12 +116,54 @@ The sitemap lists only canonical addresses: it leaves out drafts, redirect entri
 | Key | Default | |
 |---|---|---|
 | `redirects.enabled` | `true` | Applies the rules under Marketing → Redirects. |
+| `redirects.driver` | `'file'` | Where the rules are kept: `file` (YAML files in `redirects.directory`, committed with the site) or `eloquent` (the `mt_redirects` table). `MT_REDIRECTS_DRIVER` in `.env`. See [Where redirects are kept](#where-redirects-are-kept). |
+| `redirects.directory` | `base_path('content/redirects')` | The folder of the rule files. |
 | `redirects.automatic` | `true` | Adds a 301 when published content moves (slug, date, place in a tree). |
 | `redirects.case_sensitive` | `true` | `false` matches a redirect's From in any letter case, accents and other alphabets included: `/ABOUT-US` and `/About-Us` as `/about-us`, `/CAFÉ` as `/café`. What a `*` matched keeps the visitor's case. Two redirects whose From differs only in case are then refused as the same address, and a CSV row updates the redirect with that From in any case. For a site moved off one whose addresses worked in any case (Wix, IIS). |
 | `not_found.enabled` | `true` | Logs 404s. |
 | `not_found.max_rows` | `1000` | Most paths kept. Laravel's `model:prune` trims the log once a day through the scheduler; without the scheduler, the log is trimmed now and then as paths are logged, and may run over by about a tenth. One-off misses (one hit, no page linking there) go first, then the least recently seen, so a flood of made-up addresses can't push out real broken links. |
 | `not_found.ignore_user_agents` | bots, crawlers, curl, wget… | Not logged when the user agent contains one of these (any case). |
 | `not_found.ignore_paths` | `*.php`, `/wp-*`, `/.env*`, `/.git*`… | Not logged when the path matches one (`*` matches anything). Scanner probes, mostly. |
+
+#### Where redirects are kept
+
+With the `file` driver (the default since 0.29), the rules are YAML files in `content/redirects/`, committed and deployed with the site like its entries. `all.yaml` holds the rules for every site, and is the only file on a single site; on a multisite, `{site}.yaml` holds a site's own rules (`blog.yaml` for the site `blog`). Each file is a list of rules:
+
+```yaml
+-
+  id: 3f6c1e2a-9d0b-4c1e-8f5a-2b7c9e1d4a60
+  source: /old-page
+  target: /new-page
+-
+  id: '17'
+  source: /blog/*
+  target: /essays/$1
+  status: 302
+  active: false
+  automatic: true
+-
+  id: 0d1e5b7c-4a2f-4b8e-9c3d-6e7f8a9b0c1d
+  source: /gone
+  status: 410
+```
+
+- `id` is a UUID for a rule made in files, or the row's id (as a string) for one exported from the database. `source` and `target` are as on the Redirects screen; a 410 has no `target`.
+- `status`, `active` and `automatic` are written only when they aren't 301, `true` and `false`. The site is the file's name, not a field.
+- Every save sorts the file by source, so diffs stay small. The order means nothing: an exact From wins over a wildcard, a longer wildcard over a shorter one, and a site's own rule over the one for every site.
+- An emptied file stays, as `[]`. Don't delete the folder: see the safety net below.
+- Hits are counted in the database (`mt_redirect_hits`, by the rule's id) whichever driver keeps the rules, so `php artisan migrate` is still needed, and a visit never writes a file.
+
+**Editing a file by hand** works. A rule without an `id` applies, but can't be edited on the Redirects screen or counted until the file is next saved there, which gives it one. Of two rules from the same address in one file (in any letter case when `case_sensitive` is off), or with the same id, the first applies and the screen says so. A file that isn't valid YAML applies no rules, is logged as an error, and is named on the Redirects screen with the parser's message; saves to it are refused until it is fixed. A file for a site handle the install doesn't have is ignored, with a warning on the screen. Locally (Statamic's watcher on), an edited file applies on the next request; in production, after `php please stache:clear` or `stache:warm`, as for entries.
+
+**Files or the database.** Files are fine for thousands of rules: each 404 reads the compiled rules from the cache, whichever driver, and the screen and its checks read the files in memory. For tens of thousands, use the `eloquent` driver. Use it too when editors add redirects on the live site and you don't use Statamic's Git automation: a rule saved in the control panel of a site deployed with Deployer (or anything that checks out a fresh release) is written into that release and lost on the next deploy, exactly as an entry would be. With [Git automation](https://statamic.dev/git-automation) on, saving or deleting a redirect commits the files, as saving an entry does (`content/` is among Statamic's `git.paths`).
+
+**Deployer** (`recipe/statamic.php`) needs nothing more: the files ship with each release, `stache:clear` and `stache:warm` read them afresh, and the compiled rules are cached under a key that includes the release's folder, so the release still serving until the switch can't put its old rules back in the cache.
+
+**A site whose handle is `all`** can't keep rules in files, as `all.yaml` holds the rules for every site: the Redirects screen says so, and its saves are refused. Rename the site, or use the `eloquent` driver.
+
+**The safety net.** While the driver is `file`, the folder doesn't exist and `mt_redirects` has rows, the addon keeps using the database: a site updated from an earlier version changes nothing until it runs `php please mt:export-redirects`, which makes the folder. The Redirects screen says how many rules are still in the database, and the log says it once a day. Making the folder by hand also ends it, and hides the rules in the database. See [upgrading.md](upgrading.md#from-028-redirects-in-files).
+
+Both settings are read each time they are used, not when the app boots. If code changes them while it runs (a test, say), or changes rules other than through `RedirectRepository`, call `JothamLec\MarketingToolkit\Redirects\Matcher::flush()` to drop the compiled rules.
 
 
 ### Languages (hreflang)
@@ -289,6 +331,8 @@ The front-end toolbar shows for anyone with `access cp`, and each of its panels 
 | `php please mt:install --tab=shop` | Adds a whole tab the blueprint doesn't have (`shop`, `publisher`, `tracking`…), to whichever of the two sets it belongs to. |
 | `php please mt:install --forms` | Adds the lead source fields to every form; see [tracking.md](tracking.md#leads). |
 | `php please mt:search-console [--site=]` | Imports the last period's numbers from Google Search Console. With several sites, each site that has a property, or only `--site`. |
+| `php please mt:export-redirects [--force] [--hits-only]` | Copies the redirects in the `mt_redirects` table into files (`all.yaml` and one `{site}.yaml` per site), whatever the driver. Each keeps its row's id, and its hits go into `mt_redirect_hits`. It always makes the folder and `all.yaml`, refuses to overwrite a file that exists unless given `--force`, and writes rows as they are, unchecked. `--hits-only` writes no file: it copies the hits of the rules already in files from `mt_redirects`, keeping the larger count and the later date. |
+| `php please mt:import-redirects [--force]` | Copies the redirects in files into `mt_redirects`, for a move to the `eloquent` driver; each gets a new row id and takes its hits along. Refuses when the table has rows, unless given `--force`, which updates the rule from the same address on the same site. The files are left in place. |
 | `php please mt:report [--site=]` | Runs a whole report in the terminal and prints the scores. Continues a report that's already running. With several sites, one report per site in turn, or only `--site`; the schedule runs one per site. |
 
 ## Laravel Boost

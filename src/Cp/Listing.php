@@ -3,16 +3,19 @@
 namespace JothamLec\MarketingToolkit\Cp;
 
 use Closure;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\AbstractPaginator;
 use Illuminate\Support\Collection;
 use Statamic\CP\Column;
 
 /**
  * Answers the requests of Statamic's `<Listing>` component for an Eloquent
- * table. It handles search, sorting by a listed column, and pagination, and it
- * returns the columns in the shape the component expects.
+ * table, or for a page of rows fetched elsewhere (page()). It handles search,
+ * sorting by a listed column, and pagination, and it returns the columns in
+ * the shape the component expects.
  */
 final class Listing
 {
@@ -36,12 +39,40 @@ final class Listing
             });
         }
 
-        $sort = array_key_exists((string) $request->input('sort'), $columns) ? $request->input('sort') : array_key_first($columns);
-        $order = in_array($request->input('order'), ['asc', 'desc'], true) ? $request->input('order') : $defaultOrder;
-        $page = $query->orderBy($sort, $order)->orderBy('id')->paginate(min(500, max(10, (int) $request->input('perPage', 50))));
+        [$sort, $order, $perPage] = self::sorting($request, $columns, $defaultOrder);
 
+        return self::page($query->orderBy($sort, $order)->orderBy('id')->paginate($perPage), $columns, $rows);
+    }
+
+    /**
+     * Reads the sort column, the order and the page size the listing asks for, keeping to the listed
+     * columns, `asc` or `desc`, and 10 to 500 rows.
+     *
+     * @param  array<string, string>  $columns
+     * @return array{string, string, int}
+     */
+    public static function sorting(Request $request, array $columns, string $defaultOrder = 'asc'): array
+    {
+        $sort = array_key_exists((string) $request->input('sort'), $columns) ? (string) $request->input('sort') : (string) array_key_first($columns);
+        $order = in_array($request->input('order'), ['asc', 'desc'], true) ? (string) $request->input('order') : $defaultOrder;
+
+        return [$sort, $order, min(500, max(10, (int) $request->input('perPage', 50)))];
+    }
+
+    /**
+     * Answers with a page already fetched, such as a page of redirects from either driver.
+     *
+     * @template TItem
+     *
+     * @param  LengthAwarePaginator<int, TItem>  $page
+     * @param  array<string, string>  $columns
+     * @param  Closure(Collection<int, TItem>): iterable<array<string, mixed>>  $rows
+     * @return array{data: list<array<string, mixed>>, meta: array<string, mixed>}
+     */
+    public static function page(LengthAwarePaginator $page, array $columns, Closure $rows): array
+    {
         return [
-            'data' => collect($rows($page->getCollection()))->values()->all(),
+            'data' => collect($rows($page instanceof AbstractPaginator ? $page->getCollection() : collect($page->items())))->values()->all(),
             'meta' => [
                 'current_page' => $page->currentPage(),
                 'last_page' => $page->lastPage(),

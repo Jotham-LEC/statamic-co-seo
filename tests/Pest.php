@@ -5,14 +5,23 @@ use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use JothamLec\MarketingToolkit\Commands\Install;
 use JothamLec\MarketingToolkit\Context;
 use JothamLec\MarketingToolkit\Cp\Navigation;
 use JothamLec\MarketingToolkit\IndexNow\IndexNow;
 use JothamLec\MarketingToolkit\Meta;
 use JothamLec\MarketingToolkit\Og\Generator;
+use JothamLec\MarketingToolkit\Redirects\Drivers;
+use JothamLec\MarketingToolkit\Redirects\File\SiteRules;
+use JothamLec\MarketingToolkit\Redirects\Matcher;
+use JothamLec\MarketingToolkit\Redirects\Redirect;
+use JothamLec\MarketingToolkit\Redirects\RedirectHit;
+use JothamLec\MarketingToolkit\Redirects\RedirectRepository;
+use JothamLec\MarketingToolkit\Redirects\Rule;
 use JothamLec\MarketingToolkit\Reports\ExternalLinkChecker;
 use JothamLec\MarketingToolkit\SiteSeo;
 use JothamLec\MarketingToolkit\Tests\TestCase;
@@ -43,6 +52,11 @@ uses(TestCase::class)
 
         // mt:install writes collection blueprints to disk, which would outlive the test.
         File::deleteDirectory(resource_path('blueprints/collections'));
+
+        // Redirect rules: the suites that cover both drivers run on the database by default, and on files
+        // with MT_TEST_REDIRECTS=file (composer test runs both). Rule files go in a folder of this
+        // process's own, emptied for each test.
+        redirectsDriver(env('MT_TEST_REDIRECTS') === 'file' ? 'file' : 'eloquent');
 
         // On a host without Imagick, pages would point at no card: the tests of card URLs
         // still run there (those that draw one are skipped), so cards count as drawable.
@@ -289,4 +303,140 @@ function marketingNav(bool $children = false): Illuminate\Support\Collection
     }
 
     return $items->keyBy(fn ($item) => $item->display());
+}
+
+/**
+ * Stores redirect rules with this driver from now on, in an empty folder of the test process's own.
+ * For files the folder is made, so rows a test writes to the database don't bring the safety net in.
+ */
+function redirectsDriver(string $driver): void
+{
+    $folder = storage_path('framework/testing/redirects');
+    File::deleteDirectory($folder);
+
+    if ($driver === 'file') {
+        File::ensureDirectoryExists($folder);
+    }
+
+    config(['marketing-toolkit.redirects.driver' => $driver, 'marketing-toolkit.redirects.directory' => $folder]);
+    app()->forgetScopedInstances();
+}
+
+/**
+ * Whether these tests store redirect rules in files (MT_TEST_REDIRECTS=file).
+ */
+function onFiles(): bool
+{
+    return app(RedirectRepository::class)->driver() === 'file';
+}
+
+/**
+ * Saves a redirect rule through the driver the test runs on.
+ *
+ * @param  array<string, mixed>  $attributes
+ */
+function redirectRule(array $attributes): Rule
+{
+    $rule = app(RedirectRepository::class)->save(Rule::make($attributes));
+
+    // Hits are counted, never saved with a rule: a test that starts with some writes them where the driver counts them.
+    if ($hits = (int) ($attributes['hits'] ?? 0)) {
+        onFiles()
+            ? RedirectHit::merge((string) $rule->id, $hits, null)
+            : Redirect::query()->whereKey((int) $rule->id)->update(['hits' => $hits]);
+        $rule->hits = $hits;
+    }
+
+    return $rule;
+}
+
+/**
+ * Every redirect rule the driver holds, with its hits, oldest first on the database.
+ *
+ * @return Illuminate\Support\Collection<int, Rule>
+ */
+function redirectRules(): Illuminate\Support\Collection
+{
+    $repository = app(RedirectRepository::class);
+
+    return $repository->all()->map(fn ($rule) => $repository->find((string) $rule->id) ?? $rule)->values();
+}
+
+/**
+ * The rule as it is stored now, with its hits, or null once it is deleted.
+ */
+function freshRule(Rule $rule): ?Rule
+{
+    return app(RedirectRepository::class)->find((string) $rule->id);
+}
+
+/**
+ * Changes a saved rule's fields and saves it through the driver.
+ *
+ * @param  array<string, mixed>  $changes
+ */
+function updateRule(Rule $rule, array $changes): Rule
+{
+    return app(RedirectRepository::class)->save($rule->fill($changes));
+}
+
+function deleteRule(Rule $rule): void
+{
+    app(RedirectRepository::class)->delete($rule);
+}
+
+/**
+ * Whether the suite runs on files (MT_TEST_REDIRECTS=file), for a test that is about the database
+ * driver alone and is skipped there.
+ */
+function testingOnFiles(): bool
+{
+    return env('MT_TEST_REDIRECTS') === 'file';
+}
+
+/**
+ * Stores a rule as it is, unchecked and untidied, as a site's own migration inserts a row or someone
+ * types it into a rule file.
+ *
+ * @param  array<string, mixed>  $attributes
+ */
+function storedRule(array $attributes): void
+{
+    if (! onFiles()) {
+        DB::table('mt_redirects')->insert(['status' => 301, 'active' => true, 'automatic' => false, 'hits' => 0, ...$attributes]);
+
+        return;
+    }
+
+    $store = Drivers::store();
+    $file = $store->file(SiteRules::keyFor($attributes['site'] ?? null));
+    $file->rules[] = Rule::make(['id' => (string) Str::uuid(), ...$attributes]);
+    $store->save($file);
+    Matcher::flush();
+}
+
+/**
+ * These fields of a rule, as an array.
+ *
+ * @param  list<string>  $fields
+ * @return array<string, mixed>
+ */
+function ruleFields(?Rule $rule, array $fields): array
+{
+    return collect($rule?->toArray() ?? [])->only($fields)->all();
+}
+
+/**
+ * These fields of every rule, sorted by site (every site first) and source.
+ *
+ * @param  list<string>  $fields
+ * @return list<array<string, mixed>>
+ */
+function ruleRows(array $fields): array
+{
+    return redirectRules()
+        ->sort(fn ($a, $b) => [$a->site !== null, (string) $a->site, $a->source] <=> [$b->site !== null, (string) $b->site, $b->source])
+        ->map(fn ($rule) => ruleFields($rule, $fields))
+        ->values()
+        ->all();
 }

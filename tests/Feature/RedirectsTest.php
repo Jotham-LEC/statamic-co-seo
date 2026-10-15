@@ -12,12 +12,17 @@ use Illuminate\Support\Facades\Schema;
 use JothamLec\MarketingToolkit\Redirects\Csv;
 use JothamLec\MarketingToolkit\Redirects\Matcher;
 use JothamLec\MarketingToolkit\Redirects\Redirect;
+use JothamLec\MarketingToolkit\Redirects\RedirectRepository;
+use JothamLec\MarketingToolkit\Redirects\Rule;
 use Statamic\Facades\Site;
 use Statamic\Facades\URL;
 
-function rule(string $source, ?string $target, int $status = 301, bool $active = true): Redirect
+// These run on both drivers: composer test runs the group again on files (MT_TEST_REDIRECTS=file).
+pest()->group('redirects');
+
+function rule(string $source, ?string $target, int $status = 301, bool $active = true): Rule
 {
-    return Redirect::query()->create(['source' => $source, 'target' => $target, 'status' => $status, 'active' => $active]);
+    return redirectRule(['source' => $source, 'target' => $target, 'status' => $status, 'active' => $active]);
 }
 
 test('an exact rule sends a missing address on, and counts the hit', function () {
@@ -25,8 +30,8 @@ test('an exact rule sends a missing address on, and counts the hit', function ()
 
     $this->get('/old-page')->assertStatus(301)->assertRedirect('https://example.test/new-page');
 
-    expect($redirect->fresh()->hits)->toBe(1)
-        ->and($redirect->fresh()->last_hit_at)->not->toBeNull();
+    expect(freshRule($redirect)->hits)->toBe(1)
+        ->and(freshRule($redirect)->lastHitAt)->not->toBeNull();
 });
 
 test('rules are stored and matched without the trailing slash or query string', function () {
@@ -110,10 +115,10 @@ test('the cached rules follow saves and deletes', function () {
     $redirect = rule('/old', '/one');
     $this->get('/old')->assertRedirect('https://example.test/one');
 
-    $redirect->update(['target' => '/two']);
+    updateRule($redirect, ['target' => '/two']);
     $this->get('/old')->assertRedirect('https://example.test/two');
 
-    $redirect->delete();
+    deleteRule($redirect);
     $this->get('/old')->assertNotFound();
 });
 
@@ -144,7 +149,7 @@ test('a source typed percent-encoded, as copied from the address bar, matches', 
 });
 
 test('a source saved encoded before it was decoded on save still matches', function () {
-    Redirect::query()->insert(['source' => '/caf%C3%A9', 'target' => '/x', 'status' => 301, 'active' => true, 'automatic' => false, 'hits' => 0]);
+    storedRule(['source' => '/caf%C3%A9', 'target' => '/x']);
 
     $this->get('/caf%C3%A9')->assertRedirect('https://example.test/x');
 });
@@ -156,7 +161,7 @@ test('a target keeps its #fragment, after the visitor\'s query string', function
 });
 
 test('a rule that sends an address back to itself, directly or through another rule, is refused', function () {
-    $fails = fn (string $source, string $target) => Redirect::validator(['source' => $source, 'target' => $target, 'status' => 301, 'active' => true])->fails();
+    $fails = fn (string $source, string $target) => Rule::validator(['source' => $source, 'target' => $target, 'status' => 301, 'active' => true])->fails();
     rule('/a', '/b');
 
     expect($fails('/same', '/same/'))->toBeTrue()
@@ -168,7 +173,7 @@ test('a rule that sends an address back to itself, directly or through another r
 });
 
 test('a rule that comes back to its own address through a longer chain of rules is refused', function () {
-    $validator = fn (string $source, string $target, ?int $ignore = null) => Redirect::validator(['source' => $source, 'target' => $target, 'status' => 301, 'active' => true], $ignore);
+    $validator = fn (string $source, string $target, ?string $ignore = null) => Rule::validator(['source' => $source, 'target' => $target, 'status' => 301, 'active' => true], $ignore);
     rule('/b', '/c');
     rule('/c', '/d/x');
     rule('/d/*', '/a');
@@ -180,17 +185,17 @@ test('a rule that comes back to its own address through a longer chain of rules 
         ->and($validator('/z', '/b')->fails())->toBeFalse()
         ->and($validator('/z', '/p')->fails())->toBeFalse()
         // Editing the rule at the end of the chain: its old version doesn't count.
-        ->and($validator('/d/*', '/elsewhere', Redirect::query()->where('source', '/d/*')->value('id'))->fails())->toBeFalse();
+        ->and($validator('/d/*', '/elsewhere', app(RedirectRepository::class)->forSource('/d/*')->id)->fails())->toBeFalse();
 });
 
 test('a rule saved before that check, sending an address to itself, is not served', function () {
-    Redirect::query()->insert(['source' => '/a', 'target' => '/a/', 'status' => 301, 'active' => true, 'automatic' => false, 'hits' => 0]);
+    storedRule(['source' => '/a', 'target' => '/a/']);
 
     $this->get('/a')->assertNotFound();
 });
 
 test('an address with a line break or another control character is refused, as it would go into the Location header', function () {
-    $fails = fn (string $source, string $target) => Redirect::validator(['source' => $source, 'target' => $target, 'status' => 301, 'active' => true])->fails();
+    $fails = fn (string $source, string $target) => Rule::validator(['source' => $source, 'target' => $target, 'status' => 301, 'active' => true])->fails();
 
     expect($fails('/a', "/b\r\nSet-Cookie: x=1"))->toBeTrue()
         ->and($fails('/a', "https://elsewhere.test/\nx"))->toBeTrue()
@@ -199,7 +204,7 @@ test('an address with a line break or another control character is refused, as i
 });
 
 test('what a visitor typed can\'t choose the site a wildcard sends them to', function () {
-    $fails = fn (string $target) => Redirect::validator(['source' => '/go/*', 'target' => $target, 'status' => 301, 'active' => true])->fails();
+    $fails = fn (string $target) => Rule::validator(['source' => '/go/*', 'target' => $target, 'status' => 301, 'active' => true])->fails();
 
     expect($fails('https://example.com$1'))->toBeTrue()
         ->and($fails('https://$1'))->toBeTrue()
@@ -208,7 +213,7 @@ test('what a visitor typed can\'t choose the site a wildcard sends them to', fun
 });
 
 test('a redirect goes to the site\'s own address, whatever Host header the request carried', function () {
-    Redirect::query()->create(['source' => '/old', 'target' => '/new']);
+    redirectRule(['source' => '/old', 'target' => '/new']);
 
     $this->get('https://example.test/old', ['Host' => 'evil.test'])
         ->assertRedirect('https://example.test/new');
@@ -217,8 +222,8 @@ test('a redirect goes to the site\'s own address, whatever Host header the reque
 
 test('on a site whose URL is relative, a redirect goes to a path alone, not to the request\'s Host header', function () {
     Site::setSites(['default' => ['name' => 'Acme', 'url' => '/', 'locale' => 'en_US']]);
-    Redirect::query()->create(['source' => '/old', 'target' => '/new']);
-    Redirect::query()->create(['source' => '/away', 'target' => 'https://elsewhere.test/page']);
+    redirectRule(['source' => '/old', 'target' => '/new']);
+    redirectRule(['source' => '/away', 'target' => 'https://elsewhere.test/page']);
 
     expect($this->get('https://evil.test/old')->assertStatus(301)->headers->get('Location'))->toBe('/new')
         ->and($this->get('https://evil.test/away')->headers->get('Location'))->toBe('https://elsewhere.test/page');
@@ -230,7 +235,7 @@ test('on sites in folders with relative URLs, the path keeps the site\'s folder'
         'default' => ['name' => 'Acme', 'url' => '/', 'locale' => 'en_US'],
         'fr' => ['name' => 'Acme', 'url' => '/fr/', 'locale' => 'fr_FR'],
     ]);
-    Redirect::query()->create(['site' => 'fr', 'source' => '/old', 'target' => '/new']);
+    redirectRule(['site' => 'fr', 'source' => '/old', 'target' => '/new']);
 
     expect($this->get('https://evil.test/fr/old')->assertStatus(301)->headers->get('Location'))->toBe('/fr/new');
 });
@@ -250,7 +255,7 @@ test('letter case counts by default', function () {
 
     $this->get('/about-us')->assertNotFound();
     $this->get('/blog/post')->assertNotFound();
-    expect(Redirect::validator(['source' => '/about-us', 'target' => '/x', 'status' => 301, 'active' => true])->fails())->toBeFalse();
+    expect(Rule::validator(['source' => '/about-us', 'target' => '/x', 'status' => 301, 'active' => true])->fails())->toBeFalse();
 });
 
 test('with case_sensitive off, a source matches in any letter case, and a wildcard passes on what it matched as typed', function () {
@@ -291,18 +296,18 @@ test('with case_sensitive off, a source differing only in case is the same one, 
     config(['marketing-toolkit.redirects.case_sensitive' => false]);
     $existing = rule('/about-us', '/about');
 
-    expect(Redirect::validator(['source' => '/ABOUT-US/', 'target' => '/x', 'status' => 301, 'active' => true])->errors()->first('source'))
+    expect(Rule::validator(['source' => '/ABOUT-US/', 'target' => '/x', 'status' => 301, 'active' => true])->errors()->first('source'))
         ->toBe('Another redirect already starts from this address.')
-        ->and(Redirect::validator(['source' => '/ABOUT-US', 'target' => '/x', 'status' => 301, 'active' => true], $existing->id)->fails())->toBeFalse();
+        ->and(Rule::validator(['source' => '/ABOUT-US', 'target' => '/x', 'status' => 301, 'active' => true], $existing->id)->fails())->toBeFalse();
 
     rule('/Café', '/coffee');
-    expect(Redirect::validator(['source' => '/CAFÉ', 'target' => '/x', 'status' => 301, 'active' => true])->fails())->toBeTrue();
+    expect(Rule::validator(['source' => '/CAFÉ', 'target' => '/x', 'status' => 301, 'active' => true])->fails())->toBeTrue();
 
     $result = app(Csv::class)->import("source,target,status,active\n/About-Us,/company,301,1\n");
 
     expect($result)->toBe(['created' => 0, 'updated' => 1, 'errors' => []])
-        ->and(Redirect::query()->count())->toBe(2)
-        ->and($existing->fresh()->target)->toBe('/company');
+        ->and(redirectRules()->count())->toBe(2)
+        ->and(freshRule($existing)->target)->toBe('/company');
 });
 
 test('with case_sensitive off, a CSV import folds the stored sources once and clears the cached rules once', function () {
@@ -324,20 +329,25 @@ test('with case_sensitive off, a CSV import folds the stored sources once and cl
         ->and($result['created'])->toBe(1)
         ->and($result['updated'])->toBe(2)
         ->and($result['errors'])->toBe(['Row 5: Another redirect already starts from this address.'])
-        ->and($about->fresh()->target)->toBe('/company')
-        ->and(Redirect::forSource('/new')->target)->toBe('/b')
+        ->and(freshRule($about)->target)->toBe('/company')
+        ->and(app(RedirectRepository::class)->forSource('/new')->target)->toBe('/b')
         ->and(Cache::has('mt:redirect-rules:default:any-case'))->toBeFalse();
-});
+})->skip(testingOnFiles(), 'rows written to the database alone');
 
 test('a CSV import clears the cached rules once, after its rows are saved', function () {
     $forgotten = [];
     Event::listen(ForgettingKey::class, function (ForgettingKey $event) use (&$forgotten) {
-        $forgotten[] = [$event->key, Redirect::query()->count()];
+        if (str_starts_with($event->key, 'mt:redirect-rules:')) {
+            $forgotten[] = [$event->key, redirectRules()->count()];
+        }
     });
 
     app(Csv::class)->import("/a,/b\n/c,/d\n/e,/f\n");
 
-    expect($forgotten)->toBe([['mt:redirect-rules:default', 3], ['mt:redirect-rules:default:any-case', 3]]);
+    // Both drivers' keys, for each letter-case setting, each once and after all three rows.
+    expect($forgotten)->toHaveCount(4)
+        ->and(collect($forgotten)->pluck(0)->unique())->toHaveCount(4)
+        ->and(collect($forgotten)->pluck(1)->unique()->all())->toBe([3]);
 });
 
 test('a CSV import reads the redirects a fixed number of times, however many rows it has', function (bool $caseSensitive) {
@@ -364,7 +374,7 @@ test('a CSV import reads the redirects a fixed number of times, however many row
     };
 
     expect($reads(2))->toBe($reads(20));
-})->with(['case-sensitive' => true, 'any case' => false]);
+})->with(['case-sensitive' => true, 'any case' => false])->skip(testingOnFiles(), 'counts queries of the database');
 
 test('a CSV cell in quotes may hold a line break, and rows are counted as records', function () {
     $result = app(Csv::class)->import("source,target,status,active\n\"/a\nb\",/x,301,1\n/two,/2,301,1\n\n/two,/two,301,1\n");
@@ -374,7 +384,7 @@ test('a CSV cell in quotes may hold a line break, and rows are counted as record
             'Row 2: '.__('marketing-toolkit::validation.redirect.control_characters'),
             'Row 4: '.__('marketing-toolkit::validation.redirect.points_back'),
         ])
-        ->and(Redirect::query()->pluck('source')->all())->toBe(['/two']);
+        ->and(redirectRules()->pluck('source')->all())->toBe(['/two']);
 });
 
 test('a CSV row that isn\'t UTF-8 is reported by its number, and the other rows are imported', function () {
@@ -382,7 +392,7 @@ test('a CSV row that isn\'t UTF-8 is reported by its number, and the other rows 
 
     expect($result['created'])->toBe(2)
         ->and($result['errors'])->toBe(['Row 3: '.__('marketing-toolkit::validation.redirect.encoding')])
-        ->and(Redirect::query()->orderBy('source')->pluck('source')->all())->toBe(['/one', '/two']);
+        ->and(redirectRules()->sortBy('source')->pluck('source')->values()->all())->toBe(['/one', '/two']);
 });
 
 test('a CSV row the database refuses is reported, and the rows before and after it are kept', function () {
@@ -398,22 +408,22 @@ test('a CSV row the database refuses is reported, and the rows before and after 
 
     expect($result['created'])->toBe(2)
         ->and($result['errors'])->toBe([__('marketing-toolkit::validation.csv_row_failed', ['row' => 2])])
-        ->and(Redirect::query()->orderBy('source')->pluck('source')->all())->toBe(['/one', '/two']);
+        ->and(redirectRules()->sortBy('source')->pluck('source')->values()->all())->toBe(['/one', '/two']);
     Exceptions::assertReported(QueryException::class);
-});
+})->skip(testingOnFiles(), 'rows written to the database alone');
 
 test('a CSV import that updates an automatic redirect makes it the user\'s own, as the form does', function () {
     $redirect = rule('/old', '/new');
-    $redirect->update(['automatic' => true]);
+    updateRule($redirect, ['automatic' => true]);
 
     app(Csv::class)->import("/old,/newer\n");
 
-    expect($redirect->fresh()->only(['target', 'automatic']))->toBe(['target' => '/newer', 'automatic' => false]);
+    expect(freshRule($redirect))->target->toBe('/newer')->automatic->toBeFalse();
 });
 
 test('with case_sensitive off, a chain of rules that comes back in another letter case is refused', function () {
     config(['marketing-toolkit.redirects.case_sensitive' => false]);
-    $validator = fn (string $source, string $target) => Redirect::validator(['source' => $source, 'target' => $target, 'status' => 301, 'active' => true]);
+    $validator = fn (string $source, string $target) => Rule::validator(['source' => $source, 'target' => $target, 'status' => 301, 'active' => true]);
     rule('/b', '/A');
     rule('/c', '/d');
     rule('/D', '/E/x');

@@ -9,6 +9,8 @@ use Illuminate\Support\Facades\Queue;
 use JothamLec\MarketingToolkit\Boost\Boost;
 use JothamLec\MarketingToolkit\Conversions\Attribution;
 use JothamLec\MarketingToolkit\Cp\Navigation;
+use JothamLec\MarketingToolkit\Events\RedirectDeleted;
+use JothamLec\MarketingToolkit\Events\RedirectSaved;
 use JothamLec\MarketingToolkit\Http\Middleware\HandleMissing;
 use JothamLec\MarketingToolkit\Http\Middleware\MarkToolbarUser;
 use JothamLec\MarketingToolkit\IndexNow\IndexNow;
@@ -17,6 +19,9 @@ use JothamLec\MarketingToolkit\Listeners\CountConversion;
 use JothamLec\MarketingToolkit\Listeners\FlushSitemap;
 use JothamLec\MarketingToolkit\Listeners\RedirectChangedUris;
 use JothamLec\MarketingToolkit\NotFound\MissingPath;
+use JothamLec\MarketingToolkit\Redirects\Drivers;
+use JothamLec\MarketingToolkit\Redirects\File\RedirectsStore;
+use JothamLec\MarketingToolkit\Redirects\RedirectRepository;
 use JothamLec\MarketingToolkit\Reports\ReportSettings;
 use JothamLec\MarketingToolkit\SearchConsole\Client as SearchConsoleClient;
 use JothamLec\MarketingToolkit\SearchConsole\Connection;
@@ -36,7 +41,9 @@ use Statamic\Events\StacheCleared;
 use Statamic\Events\TaxonomySaved;
 use Statamic\Events\TermDeleted;
 use Statamic\Events\TermSaved;
+use Statamic\Facades\Git;
 use Statamic\Facades\Permission;
+use Statamic\Facades\Stache;
 use Statamic\Providers\AddonServiceProvider;
 use Statamic\Statamic;
 
@@ -103,6 +110,12 @@ class ServiceProvider extends AddonServiceProvider
 
         // There is one instance per request, because it gathers the changed addresses until the response is out.
         $this->app->singleton(IndexNow::class);
+
+        // Redirect rules are stored by the driver `redirects.driver` names, chosen each time the repository
+        // is resolved, so a change to the config takes effect at once. Drivers remembers for the request
+        // whether rules are still in the database (its safety net).
+        $this->app->scoped(Drivers::class);
+        $this->app->bind(RedirectRepository::class, fn ($app) => $app->make(Drivers::class)->repository());
     }
 
     /**
@@ -154,6 +167,10 @@ class ServiceProvider extends AddonServiceProvider
 
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
 
+        // The file driver's rules are a Stache store, so `stache:clear` and `stache:warm` read them afresh.
+        Stache::registerStore(new RedirectsStore);
+        self::listenForGit();
+
         Permission::extend(fn () => Permission::group('marketing-toolkit', __('marketing-toolkit::cp.permissions.group'), function () {
             Permission::register(Permissions::VIEW)->label(__('marketing-toolkit::cp.permissions.view'));
             Permission::register(Permissions::REDIRECTS)->label(__('marketing-toolkit::cp.permissions.redirects'));
@@ -177,6 +194,18 @@ class ServiceProvider extends AddonServiceProvider
             'trackingFields' => Tracking::FIELDS,
             'trackingFromConfig' => array_filter(app(Tracking::class)->fromConfig()),
         ]]);
+    }
+
+    /**
+     * With Statamic's Git automation on, saving or deleting a redirect commits the rule files, as saving
+     * an entry commits its file.
+     */
+    public static function listenForGit(): void
+    {
+        if (config('statamic.git.enabled')) {
+            Git::listen(RedirectSaved::class);
+            Git::listen(RedirectDeleted::class);
+        }
     }
 
     /**

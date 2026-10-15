@@ -4,10 +4,10 @@ namespace JothamLec\MarketingToolkit\Rules;
 
 use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use JothamLec\MarketingToolkit\Redirects\Matcher;
-use JothamLec\MarketingToolkit\Redirects\Redirect;
+use JothamLec\MarketingToolkit\Redirects\RedirectRepository;
+use JothamLec\MarketingToolkit\Redirects\Rule;
 use JothamLec\MarketingToolkit\Support\Sites;
 
 /**
@@ -23,11 +23,11 @@ final readonly class RedirectTarget implements ValidationRule
     /**
      * @param  string  $source  the rule's source, as typed
      * @param  ?string  $site  the rule's site, or null for a rule for every site
-     * @param  ?int  $ignoreId  the rule being edited, which stands aside for its new version
-     * @param  ?Collection<int, Redirect>  $active  the active rules when the caller has
-     *                                              them at hand, or null to read them
+     * @param  ?string  $ignoreId  the rule being edited, which stands aside for its new version
+     * @param  ?Collection<int|string, Rule>  $active  the active rules when the caller has
+     *                                                 them at hand, or null to read them
      */
-    public function __construct(private string $source, private ?string $site = null, private ?int $ignoreId = null, private ?Collection $active = null) {}
+    public function __construct(private string $source, private ?string $site = null, private ?string $ignoreId = null, private ?Collection $active = null) {}
 
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
@@ -59,11 +59,11 @@ final readonly class RedirectTarget implements ValidationRule
             return null;
         }
 
-        if (Redirect::pointsBack($source, $target)) {
+        if (Rule::pointsBack($source, $target)) {
             return __('marketing-toolkit::validation.redirect.points_back');
         }
 
-        $source = Redirect::normalize($source);
+        $source = Rule::normalize($source);
 
         if (str_contains($source, '*')) {
             return null;
@@ -82,41 +82,36 @@ final readonly class RedirectTarget implements ValidationRule
      * Follows the rules from the target, as a visitor on $site would be sent on (null means a single site
      * and every rule), and checks whether they come back. Each step looks only at the rules that could
      * match (an exact source and the wildcards). These come from $active when it is given; otherwise they
-     * are read for that step rather than from the cached set, which an import would rebuild after every
-     * row. The rule being edited stands aside for its new version. When ignoring case, an exact source
-     * can't be looked up in SQL (see forSource()), so all the rules are read once.
+     * are asked of the repository for that step rather than read from the cached set, which an import
+     * would rebuild after every row. The rule being edited stands aside for its new version.
      */
     private function loopOn(string $source, string $target, ?string $site): ?string
     {
         $ignoreId = $this->ignoreId;
 
         if ($this->active !== null) {
-            $rules = $this->active->reject(fn (Redirect $rule) => $rule->id === $ignoreId)
-                ->when($site, fn (Collection $rules, string $site) => $rules->filter(fn (Redirect $rule) => $rule->site === $site || $rule->site === null));
-            $candidates = fn (string $path) => $rules->filter(fn (Redirect $rule) => $rule->isWildcard() || Redirect::key(Redirect::normalize($rule->source)) === Redirect::key($path));
+            $rules = $this->active->reject(fn (Rule $rule) => $ignoreId !== null && $rule->id === $ignoreId)
+                ->when($site, fn (Collection $rules, string $site) => $rules->filter(fn (Rule $rule) => $rule->site === $site || $rule->site === null));
+            $candidates = fn (string $path) => $rules->filter(fn (Rule $rule) => $rule->isWildcard() || Rule::key(Rule::normalize($rule->source)) === Rule::key($path));
         } else {
-            $query = fn () => Redirect::query()->where('active', true)->whereKeyNot($ignoreId ?? 0)
-                ->when($site, fn (Builder $query, string $site) => $query->appliesOn($site))
-                ->select(['id', 'site', 'source', 'target', 'status']);
-            $everything = Redirect::ignoresCase() ? $query()->get() : null;
-            $wildcards = $everything ?? $query()->where('source', 'like', '%*%')->get();
-            $candidates = fn (string $path) => $everything ?? $query()->where('source', $path)->get()->merge($wildcards);
+            $repository = app(RedirectRepository::class);
+            $candidates = fn (string $path) => $repository->candidates($path, $site, $ignoreId);
         }
 
-        $path = Redirect::normalize($target);
+        $path = Rule::normalize($target);
         $seen = [];
 
-        for ($hops = 1; $hops <= self::MAX_HOPS && ! isset($seen[Redirect::key($path)]); $hops++) {
-            $seen[Redirect::key($path)] = true;
+        for ($hops = 1; $hops <= self::MAX_HOPS && ! isset($seen[Rule::key($path)]); $hops++) {
+            $seen[Rule::key($path)] = true;
             $next = app(Matcher::class)->matchAmong($candidates($path), $path, $site);
 
             if ($next === null || $next['target'] === null || ! str_starts_with($next['target'], '/')) {
                 return null;
             }
 
-            $path = Redirect::normalize($next['target']);
+            $path = Rule::normalize($next['target']);
 
-            if (Redirect::key($path) === Redirect::key($source)) {
+            if (Rule::key($path) === Rule::key($source)) {
                 return $hops === 1
                     ? __('marketing-toolkit::validation.redirect.loop')
                     : __('marketing-toolkit::validation.redirect.loop_steps', ['steps' => $hops]);

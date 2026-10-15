@@ -2,25 +2,19 @@
 
 namespace JothamLec\MarketingToolkit\Redirects;
 
-use Closure;
 use Illuminate\Contracts\Validation\Validator as ValidatorContract;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Validator;
-use Illuminate\Validation\Rule;
-use JothamLec\MarketingToolkit\Rules\RedirectTarget;
-use JothamLec\MarketingToolkit\Rules\UniqueSource;
 use JothamLec\MarketingToolkit\Support\Sites;
 
 /**
- * A redirect is one rule. Requests for `source` go to `target` with `status` (301 or 302), or they are
- * answered with 410 Gone. A `*` in the source matches anything, and the target receives what it matched
- * as $1, $2, and so on. Rules apply only to addresses that the site would otherwise answer with a 404.
- * On a multi-site install, a rule names the site it applies on, or names none to apply on every site,
- * and a site's own rule wins over a rule for every site from the same address.
+ * A redirect rule as a row of the `mt_redirects` table, where the Eloquent driver stores rules (see
+ * RedirectRepository; the file driver keeps them in YAML, and Rule describes a rule either way). Saving
+ * or deleting a row through this model writes the database whatever the driver, so a site's own
+ * migrations that insert rows keep working. Code that should follow the driver uses the repository.
  *
  * @property int $id
  * @property ?string $site
@@ -34,10 +28,11 @@ use JothamLec\MarketingToolkit\Support\Sites;
  */
 class Redirect extends Model
 {
-    public const array STATUSES = [301, 302, 410];
+    /** @deprecated 0.29.0 Use Rule::STATUSES. Removed in 1.0. */
+    public const array STATUSES = Rule::STATUSES;
 
-    /** This is the longest source allowed, as MySQL's unique index on site and source must stay under 3072 bytes. */
-    public const int MAX_SOURCE = 736;
+    /** @deprecated 0.29.0 Use Rule::MAX_SOURCE. Removed in 1.0. */
+    public const int MAX_SOURCE = Rule::MAX_SOURCE;
 
     protected $table = 'mt_redirects';
 
@@ -60,8 +55,8 @@ class Redirect extends Model
     {
         static::saving(function (self $redirect) {
             $redirect->site = $redirect->site === '' ? null : $redirect->site;
-            $redirect->source = self::normalize($redirect->source);
-            $redirect->target = $redirect->status === 410 ? null : self::normalizeTarget($redirect->target);
+            $redirect->source = Rule::normalize($redirect->source);
+            $redirect->target = $redirect->status === 410 ? null : Rule::normalizeTarget($redirect->target);
         });
 
         // We flush after the transaction, if any, because a request in between could cache the old rules again.
@@ -109,163 +104,130 @@ class Redirect extends Model
     }
 
     /**
-     * Returns a site path in the form that rules store and compare. The path is decoded (so `/caf%C3%A9` and
-     * `/café` are one address, as they are when requests are matched), has a leading slash, has no trailing
-     * slash (except for the home page), and has no query string or fragment.
+     * @deprecated 0.29.0 Use Rule::normalize(). Removed in 1.0.
      */
     public static function normalize(string $path): string
     {
-        $path = trim($path);
-        $path = substr($path, 0, strcspn($path, '?#'));
-
-        return '/'.trim(rawurldecode($path), '/');
+        return Rule::normalize($path);
     }
 
     /**
-     * Determines whether rules match an address in any letter case. This happens when
-     * `redirects.case_sensitive` is off, for a site whose old addresses worked in any case (Wix or IIS).
+     * @deprecated 0.29.0 Use Rule::ignoresCase(). Removed in 1.0.
      */
     public static function ignoresCase(): bool
     {
-        return ! config('marketing-toolkit.redirects.case_sensitive');
+        return Rule::ignoresCase();
     }
 
     /**
-     * Returns a normalised path in the form that rules compare. It is case-folded when matching ignores case
-     * (so `/CAFÉ` and `/café` are one address), and is otherwise left as it is. A path that isn't valid
-     * UTF-8 is left alone.
+     * @deprecated 0.29.0 Use Rule::key(). Removed in 1.0.
      */
     public static function key(string $path): string
     {
-        return self::ignoresCase() && mb_check_encoding($path, 'UTF-8') ? mb_convert_case($path, MB_CASE_FOLD_SIMPLE, 'UTF-8') : $path;
+        return Rule::key($path);
     }
 
     /**
-     * Finds the rule that starts from this address on $site (or among the rules for every site when $site is
+     * Finds the row that starts from this address on $site (or among the rules for every site when $site is
      * null), in any letter case when matching ignores case. Sources are stored as typed, and databases fold
      * letters differently (SQLite only folds A–Z, and MySQL folds by its collation), so we compare them here.
+     * This reads the database whatever the driver; RedirectRepository::forSource() reads the driver's rules.
      */
-    public static function forSource(string $source, ?int $ignoreId = null, ?string $site = null): ?self
+    public static function forSource(string $source, int|string|null $ignoreId = null, ?string $site = null): ?self
     {
-        $source = self::normalize($source);
+        $source = Rule::normalize($source);
         $query = self::query()->onSite($site)->when($ignoreId, fn ($query) => $query->whereKeyNot($ignoreId));
 
-        if (! self::ignoresCase()) {
+        if (! Rule::ignoresCase()) {
             return $query->where('source', $source)->first();
         }
 
-        $key = self::key($source);
+        $key = Rule::key($source);
 
-        return $query->orderBy('id')->cursor()->first(fn (self $redirect) => self::key(self::normalize($redirect->source)) === $key);
+        return $query->orderBy('id')->cursor()->first(fn (self $redirect) => Rule::key(Rule::normalize($redirect->source)) === $key);
     }
 
     /**
-     * Tidies a target as typed. Another site's address is kept as it is. A path on this site loses its
-     * trailing slash and keeps its query and fragment, still encoded, because it goes into the Location
-     * header as it is.
+     * @deprecated 0.29.0 Use Rule::normalizeTarget(). Removed in 1.0.
      */
     public static function normalizeTarget(?string $target): ?string
     {
-        $target = trim((string) $target);
-
-        if ($target === '') {
-            return null;
-        }
-
-        if (preg_match('#^https?://#i', $target)) {
-            return $target;
-        }
-
-        $end = strcspn($target, '?#');
-
-        return '/'.trim(substr($target, 0, $end), '/').substr($target, $end);
+        return Rule::normalizeTarget($target);
     }
 
     /**
-     * Checks a redirect's fields from a CSV row. The form checks them with the same rules() and messages()
-     * (see Http\Requests\SaveRedirect). $taken says whether another rule already starts from the source.
-     * $active holds the active rules when the caller has them at hand (such as an import, which reads them
-     * once rather than for every row); otherwise they are looked up. $sites lists the handles a rule may
-     * name (the CP passes the user's own), and every site's handle is allowed when it is not given.
+     * @deprecated 0.29.0 Use Rule::validator(). Removed in 1.0.
      *
      * @param  array<string, mixed>  $data
-     * @param  ?Collection<int, self>  $active
+     * @param  ?Collection<int|string, Rule>  $active
      * @param  ?list<string>  $sites
      */
-    public static function validator(array $data, ?int $ignoreId = null, ?bool $taken = null, ?Collection $active = null, ?array $sites = null): ValidatorContract
+    public static function validator(array $data, int|string|null $ignoreId = null, ?bool $taken = null, ?Collection $active = null, ?array $sites = null): ValidatorContract
     {
-        $site = is_string($data['site'] ?? null) && $data['site'] !== '' ? $data['site'] : null;
-
-        return Validator::make($data, self::rules((string) ($data['source'] ?? ''), $site, $ignoreId, $taken, $active, $sites), self::messages());
+        return Rule::validator($data, $ignoreId === null ? null : (string) $ignoreId, $taken, $active, $sites);
     }
 
     /**
-     * Returns the checks that a redirect's fields must pass, from the form or a CSV row. A rule may name no
-     * site (and so apply on every site) only when every site is among $sites.
+     * @deprecated 0.29.0 Use Rule::rules(). Removed in 1.0.
      *
-     * @param  ?Collection<int, self>  $active
-     * @param  ?list<string>  $sites  the handles a rule may name, or null for every site's handle
+     * @param  ?Collection<int|string, Rule>  $active
+     * @param  ?list<string>  $sites
      * @return array<string, mixed>
      */
-    public static function rules(string $source, ?string $site, ?int $ignoreId = null, ?bool $taken = null, ?Collection $active = null, ?array $sites = null): array
+    public static function rules(string $source, ?string $site, int|string|null $ignoreId = null, ?bool $taken = null, ?Collection $active = null, ?array $sites = null): array
     {
-        $sites ??= Sites::handles();
-
-        // This runs before the other checks, because a regex on text that isn't UTF-8 fails, and Postgres refuses it.
-        $utf8 = function (string $attribute, mixed $value, Closure $fail) {
-            if (is_string($value) && ! mb_check_encoding($value, 'UTF-8')) {
-                $fail(__('marketing-toolkit::validation.redirect.encoding'));
-            }
-        };
-
-        return [
-            'site' => [Rule::requiredIf(Sites::multiple() && array_diff(Sites::handles(), $sites) !== []), 'nullable', 'string', Rule::in($sites)],
-            'source' => [
-                // We reject control characters, because they would go into the Location header, where a line break
-                // starts a new header.
-                'required', 'string', 'bail', $utf8, 'max:'.self::MAX_SOURCE, 'starts_with:/', 'not_regex:/[?#]/', 'regex:/^[^\x00-\x1F\x7F]*$/',
-                new UniqueSource($site, $ignoreId, $taken),
-            ],
-            'target' => [
-                'nullable', 'required_unless:status,410', 'string', 'bail', $utf8, 'max:2048', 'regex:#^(/|https?://)#i', 'not_regex:/[\x00-\x1F\x7F]/',
-                new RedirectTarget($source, $site, $ignoreId, $active),
-            ],
-            'status' => ['required', Rule::in(self::STATUSES)],
-            'active' => ['boolean'],
-        ];
+        return Rule::rules($source, $site, $ignoreId === null ? null : (string) $ignoreId, $taken, $active, $sites);
     }
 
     /**
+     * @deprecated 0.29.0 Use Rule::messages(). Removed in 1.0.
+     *
      * @return array<string, string>
      */
     public static function messages(): array
     {
-        return [
-            'source.required' => __('marketing-toolkit::validation.redirect.source_required'),
-            'source.starts_with' => __('marketing-toolkit::validation.redirect.source_starts_with'),
-            'source.not_regex' => __('marketing-toolkit::validation.redirect.source_query'),
-            'source.regex' => __('marketing-toolkit::validation.redirect.control_characters'),
-            'target.required_unless' => __('marketing-toolkit::validation.redirect.target_required'),
-            'target.regex' => __('marketing-toolkit::validation.redirect.target_format'),
-            'target.not_regex' => __('marketing-toolkit::validation.redirect.control_characters'),
-            'status.in' => __('marketing-toolkit::validation.redirect.status'),
-            'site.in' => __('marketing-toolkit::validation.redirect.site'),
-            'site.required' => __('marketing-toolkit::validation.redirect.site_required'),
-        ];
+        return Rule::messages();
     }
 
     /**
-     * Determines whether a rule sends every address it matches back to that same address, such as `/a` to
-     * `/a`, or `/x/*` to `/x/$1`. Letter case counts even when matching ignores it, because `/About` to
-     * `/about` is how an old address in capitals reaches the page, and if that page is missing, the 404 isn't
-     * redirected again.
+     * @deprecated 0.29.0 Use Rule::pointsBack(). Removed in 1.0.
      */
     public static function pointsBack(string $source, ?string $target): bool
     {
-        $back = 0;
-        $same = preg_replace_callback('/\*/', fn () => '$'.++$back, self::normalize($source));
+        return Rule::pointsBack($source, $target);
+    }
 
-        return $target !== null && str_starts_with($target, '/') && self::normalize($target) === $same;
+    /**
+     * Returns the row as a driver-neutral rule, with its hits.
+     */
+    public function toRule(): Rule
+    {
+        return new Rule(
+            id: $this->getKey() === null ? null : (string) $this->getKey(),
+            site: $this->site,
+            source: (string) $this->source,
+            target: $this->target,
+            status: (int) ($this->status ?? 301),
+            active: (bool) ($this->active ?? true),
+            automatic: (bool) ($this->automatic ?? false),
+            hits: (int) ($this->hits ?? 0),
+            lastHitAt: $this->last_hit_at,
+        );
+    }
+
+    /**
+     * Fills the row from a rule's fields (not its id or hits).
+     */
+    public function fillFromRule(Rule $rule): self
+    {
+        return $this->fill([
+            'site' => $rule->site,
+            'source' => $rule->source,
+            'target' => $rule->target,
+            'status' => $rule->status,
+            'active' => $rule->active,
+            'automatic' => $rule->automatic,
+        ]);
     }
 
     public function isWildcard(): bool

@@ -5,18 +5,20 @@ use Inertia\Testing\AssertableInertia;
 use JothamLec\MarketingToolkit\Actions\CreateRedirect;
 use JothamLec\MarketingToolkit\Actions\DeleteRecords;
 use JothamLec\MarketingToolkit\NotFound\MissingPath;
-use JothamLec\MarketingToolkit\Redirects\Redirect;
 use Statamic\Actions\Action;
 use Statamic\Facades\Blueprint;
 use Statamic\Facades\Entry;
 use Statamic\Facades\Taxonomy;
 use Statamic\Facades\Term;
 
+// These run on both drivers: composer test runs the group again on files (MT_TEST_REDIRECTS=file).
+pest()->group('redirects');
+
 test('the redirects screen and its listing: search, sort, pagination, columns', function () {
     $this->actingAs(cpUser(['manage marketing toolkit redirects']));
-    Redirect::query()->create(['source' => '/b-old', 'target' => '/b-new']);
-    Redirect::query()->create(['source' => '/a-old', 'target' => '/a-new', 'automatic' => true]);
-    Redirect::query()->create(['source' => '/gone', 'status' => 410]);
+    redirectRule(['source' => '/b-old', 'target' => '/b-new']);
+    redirectRule(['source' => '/a-old', 'target' => '/a-new', 'automatic' => true]);
+    redirectRule(['source' => '/gone', 'status' => 410]);
 
     $this->get(cp_route('mt.redirects.index'))
         ->assertOk()
@@ -46,10 +48,10 @@ test('creating a redirect through the publish form, and the checks it must pass'
             ->where('submitMethod', 'post'));
 
     $response = $this->postJson(cp_route('mt.redirects.store'), ['source' => '/blog/*', 'target' => '/essays/$1', 'status' => '302', 'active' => true])->assertOk();
-    $redirect = Redirect::query()->sole();
+    $redirect = redirectRules()->sole();
 
-    expect($response->json('redirect'))->toBe(cp_route('mt.redirects.edit', $redirect))
-        ->and($redirect->only(['source', 'target', 'status', 'active', 'automatic']))->toBe(['source' => '/blog/*', 'target' => '/essays/$1', 'status' => 302, 'active' => true, 'automatic' => false]);
+    expect($response->json('redirect'))->toBe(cp_route('mt.redirects.edit', $redirect->id))
+        ->and(ruleFields($redirect, ['source', 'target', 'status', 'active', 'automatic']))->toBe(['source' => '/blog/*', 'target' => '/essays/$1', 'status' => 302, 'active' => true, 'automatic' => false]);
 
     $this->postJson(cp_route('mt.redirects.store'), ['source' => '/blog/*/', 'target' => '/x', 'status' => '301'])->assertJsonValidationErrors(['source' => 'already starts']);
     $this->postJson(cp_route('mt.redirects.store'), ['source' => 'no-slash', 'target' => '/x', 'status' => '301'])->assertJsonValidationErrors('source');
@@ -63,20 +65,20 @@ test('creating a redirect through the publish form, and the checks it must pass'
 
 test('editing a redirect, which also makes an automatic one manual', function () {
     $this->actingAs(cpUser(['manage marketing toolkit redirects']));
-    $redirect = Redirect::query()->create(['source' => '/old', 'target' => '/new', 'automatic' => true]);
+    $redirect = redirectRule(['source' => '/old', 'target' => '/new', 'automatic' => true]);
 
-    $this->get(cp_route('mt.redirects.edit', $redirect))
+    $this->get(cp_route('mt.redirects.edit', $redirect->id))
         ->assertInertia(fn (AssertableInertia $page) => $page->where('values.target', '/new')->where('submitMethod', 'patch')->where('stats.automatic', true));
 
-    $this->patchJson(cp_route('mt.redirects.update', $redirect), ['source' => '/old', 'target' => '/newer', 'status' => '301', 'active' => false])->assertOk();
+    $this->patchJson(cp_route('mt.redirects.update', $redirect->id), ['source' => '/old', 'target' => '/newer', 'status' => '301', 'active' => false])->assertOk();
 
-    expect($redirect->fresh()->only(['target', 'active', 'automatic']))->toBe(['target' => '/newer', 'active' => false, 'automatic' => false]);
+    expect(ruleFields(freshRule($redirect), ['target', 'active', 'automatic']))->toBe(['target' => '/newer', 'active' => false, 'automatic' => false]);
 });
 
 test('CSV export, and import that adds, updates and reports bad rows', function () {
     $this->actingAs(cpUser(['manage marketing toolkit redirects']));
-    Redirect::query()->create(['source' => '/one', 'target' => '/1']);
-    Redirect::query()->create(['source' => '/gone', 'status' => 410, 'active' => false]);
+    redirectRule(['source' => '/one', 'target' => '/1']);
+    redirectRule(['source' => '/gone', 'status' => 410, 'active' => false]);
 
     $export = $this->get(cp_route('mt.redirects.export'))->assertOk()->streamedContent();
     expect($export)->toBe("source,target,status,active\n/gone,,410,0\n/one,/1,301,1\n");
@@ -87,7 +89,7 @@ test('CSV export, and import that adds, updates and reports bad rows', function 
     expect($result)->toMatchArray(['created' => 2, 'updated' => 1])
         ->and($result['errors'])->toHaveCount(1)
         ->and($result['errors'][0])->toStartWith('Row 4:')
-        ->and(Redirect::query()->orderBy('source')->get(['source', 'target', 'status'])->toArray())->toBe([
+        ->and(redirectRules()->sortBy('source')->map(fn ($rule) => ruleFields($rule, ['source', 'target', 'status']))->values()->all())->toBe([
             ['source' => '/gone', 'target' => null, 'status' => 410],
             ['source' => '/one', 'target' => '/uno', 'status' => 301],
             ['source' => '/three', 'target' => 'https://elsewhere.test/3', 'status' => 301],
@@ -97,7 +99,7 @@ test('CSV export, and import that adds, updates and reports bad rows', function 
 
 test('an import refuses a row that loops back through an earlier row of the same file, or through a wildcard', function () {
     $this->actingAs(cpUser(['manage marketing toolkit redirects']));
-    Redirect::query()->create(['source' => '/shop/*', 'target' => '/store/$1']);
+    redirectRule(['source' => '/shop/*', 'target' => '/store/$1']);
 
     $csv = "/a,/b\n/b,/a\n/store/x,/shop/x\n";
     $result = $this->post(cp_route('mt.redirects.import'), ['file' => UploadedFile::fake()->createWithContent('r.csv', $csv)])->assertOk()->json();
@@ -111,7 +113,7 @@ test('an import refuses a row that loops back through an earlier row of the same
 
 test('a CSV row and the form refuse a loop with the same message', function () {
     $this->actingAs(cpUser(['manage marketing toolkit redirects']));
-    Redirect::query()->create(['source' => '/a', 'target' => '/b']);
+    redirectRule(['source' => '/a', 'target' => '/b']);
 
     $form = $this->postJson(cp_route('mt.redirects.store'), ['source' => '/b', 'target' => '/a', 'status' => '301', 'active' => true])
         ->assertUnprocessable()
@@ -124,7 +126,7 @@ test('a CSV row and the form refuse a loop with the same message', function () {
 
 test('the checks, the import report and the listing speak the editor\'s language', function () {
     $this->actingAs(cpUser(['manage marketing toolkit redirects']));
-    Redirect::query()->create(['source' => '/a', 'target' => '/b']);
+    redirectRule(['source' => '/a', 'target' => '/b']);
     app('translator')->addLines([
         'cp.redirects.title' => 'XX Redirects',
         'cp.listing.from' => 'XX From',
@@ -165,7 +167,7 @@ test('another addon\'s action that cannot handle our rows does not break the lis
     app('statamic.actions')->put($throwsOnForeignModels::handle(), $throwsOnForeignModels::class);
 
     $this->actingAs(cpUser(['view marketing toolkit', 'manage marketing toolkit redirects']));
-    $redirect = Redirect::query()->create(['source' => '/old', 'target' => '/new']);
+    $redirect = redirectRule(['source' => '/old', 'target' => '/new']);
     $row = MissingPath::query()->create(['path' => '/miss', 'hits' => 1, 'first_seen_at' => now(), 'last_seen_at' => now()]);
 
     expect($this->getJson(cp_route('mt.redirects.listing'))->assertOk()->json('data.0.actions.*.handle'))->toBe([DeleteRecords::handle()])
@@ -246,7 +248,7 @@ test('the 404 log listing, newest first, with a "Create redirect" action per row
 
 test('deleting redirects and 404 rows through the listing action', function () {
     $this->actingAs(cpUser(['view marketing toolkit', 'manage marketing toolkit redirects']));
-    $redirect = Redirect::query()->create(['source' => '/old', 'target' => '/new']);
+    $redirect = redirectRule(['source' => '/old', 'target' => '/new']);
     $row = MissingPath::query()->create(['path' => '/x', 'first_seen_at' => now(), 'last_seen_at' => now()]);
 
     $this->get('/old')->assertRedirect('https://example.test/new');
@@ -254,12 +256,12 @@ test('deleting redirects and 404 rows through the listing action', function () {
     $this->postJson(cp_route('mt.actions.run'), ['action' => DeleteRecords::handle(), 'selections' => [$redirect->id], 'context' => ['type' => 'redirects'], 'values' => []])->assertOk();
     $this->postJson(cp_route('mt.actions.run'), ['action' => DeleteRecords::handle(), 'selections' => [$row->id], 'context' => ['type' => '404s'], 'values' => []])->assertOk();
 
-    expect(Redirect::query()->count())->toBe(0)->and(MissingPath::query()->count())->toBe(0);
+    expect(redirectRules()->count())->toBe(0)->and(MissingPath::query()->count())->toBe(0);
     $this->get('/old')->assertNotFound();
 });
 
 test('redirects need "manage marketing toolkit redirects", the 404 log "view marketing toolkit"', function () {
-    $redirect = Redirect::query()->create(['source' => '/old', 'target' => '/new']);
+    $redirect = redirectRule(['source' => '/old', 'target' => '/new']);
 
     $this->actingAs(cpUser(['view marketing toolkit']));
 
@@ -311,7 +313,7 @@ test('the dialog\'s answer is kept for the next save of that entry', function ()
 
     Entry::find($entry->id())->syncOriginal()->slug('about-us')->save();
 
-    expect(Redirect::query()->count())->toBe(0);
+    expect(redirectRules()->count())->toBe(0);
 });
 
 test('the dialog works for a term too: the check, and the answer read by the term\'s save', function () {
@@ -327,7 +329,7 @@ test('the dialog works for a term too: the check, and the answer read by the ter
     $this->postJson(cp_route('mt.redirects.choice'), ['reference' => $reference, 'create' => false])->assertOk();
     Term::find('topics::gardens')->term()->syncOriginal()->slug('gardening')->save();
 
-    expect(Redirect::query()->count())->toBe(0);
+    expect(redirectRules()->count())->toBe(0);
 });
 
 test('the dialog does not ask about a term without a page of its own', function () {
@@ -348,20 +350,20 @@ test('a campaign link: UTM tags join the target\'s own query, show again when ed
         'utm_source' => 'linkedin', 'utm_medium' => 'paid social', 'utm_campaign' => 'autumn',
     ])->assertOk();
 
-    $redirect = Redirect::query()->sole();
+    $redirect = redirectRules()->sole();
     expect($redirect->target)->toBe('/offer?ref=1&utm_source=linkedin&utm_medium=paid%20social&utm_campaign=autumn#form');
 
-    $this->get(cp_route('mt.redirects.edit', $redirect))->assertInertia(fn (AssertableInertia $page) => $page
+    $this->get(cp_route('mt.redirects.edit', $redirect->id))->assertInertia(fn (AssertableInertia $page) => $page
         ->where('values.utm_source', 'linkedin')
         ->where('values.utm_medium', 'paid social')
         ->where('blueprint.tabs.0.sections.1.display', 'Campaign link'));
 
     // Emptied in the form: taken out of the target.
-    $this->patchJson(cp_route('mt.redirects.update', $redirect), ['source' => '/go/linkedin', 'target' => $redirect->target, 'status' => '302', 'active' => true, 'utm_source' => 'linkedin', 'utm_medium' => '', 'utm_campaign' => 'autumn'])->assertOk();
-    expect($redirect->fresh()->target)->toBe('/offer?ref=1&utm_source=linkedin&utm_campaign=autumn#form');
+    $this->patchJson(cp_route('mt.redirects.update', $redirect->id), ['source' => '/go/linkedin', 'target' => $redirect->target, 'status' => '302', 'active' => true, 'utm_source' => 'linkedin', 'utm_medium' => '', 'utm_campaign' => 'autumn'])->assertOk();
+    expect(freshRule($redirect)->target)->toBe('/offer?ref=1&utm_source=linkedin&utm_campaign=autumn#form');
 
     $this->get('https://example.test/go/linkedin')->assertStatus(302)->assertRedirect('https://example.test/offer?ref=1&utm_source=linkedin&utm_campaign=autumn#form');
-    expect($redirect->fresh()->hits)->toBe(1);
+    expect(freshRule($redirect)->hits)->toBe(1);
 });
 
 test('saving a redirect keeps the rest of the target\'s query as typed, and only swaps its UTM tags', function () {
@@ -369,19 +371,19 @@ test('saving a redirect keeps the rest of the target\'s query as typed, and only
     $target = '/search/$1?q=$1&a.b=1&x=1&x=2&flag&c=d+e#top';
 
     $this->postJson(cp_route('mt.redirects.store'), ['source' => '/find/*', 'target' => $target, 'status' => '301', 'active' => true])->assertOk();
-    $redirect = Redirect::query()->sole();
+    $redirect = redirectRules()->sole();
     expect($redirect->target)->toBe($target);
 
     $this->get('https://example.test/find/shoes')->assertRedirect('https://example.test/search/shoes?q=shoes&a.b=1&x=1&x=2&flag&c=d+e#top');
 
     // A tag the target already has, sent back unchanged with the form: nothing moves.
     $tagged = '/offer?q=$1&utm_campaign=autumn&a.b=1&x=1&x=2&flag&c=d+e#top';
-    $this->patchJson(cp_route('mt.redirects.update', $redirect), ['source' => '/find/*', 'target' => $tagged, 'status' => '301', 'active' => true, 'utm_campaign' => 'autumn'])->assertOk();
-    expect($redirect->fresh()->target)->toBe($tagged);
+    $this->patchJson(cp_route('mt.redirects.update', $redirect->id), ['source' => '/find/*', 'target' => $tagged, 'status' => '301', 'active' => true, 'utm_campaign' => 'autumn'])->assertOk();
+    expect(freshRule($redirect)->target)->toBe($tagged);
 
     // A changed one is replaced; everything else stays byte for byte.
-    $this->patchJson(cp_route('mt.redirects.update', $redirect), ['source' => '/find/*', 'target' => $tagged, 'status' => '301', 'active' => true, 'utm_campaign' => 'winter sale'])->assertOk();
-    expect($redirect->fresh()->target)->toBe('/offer?q=$1&a.b=1&x=1&x=2&flag&c=d+e&utm_campaign=winter%20sale#top');
+    $this->patchJson(cp_route('mt.redirects.update', $redirect->id), ['source' => '/find/*', 'target' => $tagged, 'status' => '301', 'active' => true, 'utm_campaign' => 'winter sale'])->assertOk();
+    expect(freshRule($redirect)->target)->toBe('/offer?q=$1&a.b=1&x=1&x=2&flag&c=d+e&utm_campaign=winter%20sale#top');
 });
 
 test('the control panel’s script gets the addresses a save asks about its redirect', function () {

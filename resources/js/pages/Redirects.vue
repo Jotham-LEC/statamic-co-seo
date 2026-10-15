@@ -1,7 +1,7 @@
 <script setup>
 import { Head, Link } from '@statamic/cms/inertia';
 import { toast } from '@statamic/cms/api';
-import { Badge, Button, Header, Listing } from '@statamic/cms/ui';
+import { Alert, Badge, Button, Header, Listing } from '@statamic/cms/ui';
 import { ref } from 'vue';
 import When from '../components/When.vue';
 import { useRequests } from '../util.js';
@@ -12,6 +12,8 @@ const props = defineProps({
     createUrl: { type: String, required: true },
     exportUrl: { type: String, required: true },
     importUrl: { type: String, required: true },
+    // Rules still read from the database, and rule files that can't be read or need a look.
+    notices: { type: Array, default: () => [] },
 });
 
 const { busy, send } = useRequests(__('marketing-toolkit::cp.redirects.import_failed'));
@@ -49,6 +51,10 @@ async function importCsv(event) {
 
     <p class="mb-4 text-sm text-gray-600 dark:text-gray-400">{{ __('marketing-toolkit::cp.redirects.intro') }}</p>
 
+    <div v-if="notices.length" class="mb-4 space-y-2">
+        <Alert v-for="notice in notices" :key="notice.message" :variant="notice.level === 'error' ? 'error' : 'warning'" :text="notice.message" :live="false" />
+    </div>
+
     <Listing
         ref="listing"
         :url="listingUrl"
@@ -60,7 +66,8 @@ async function importCsv(event) {
         :allow-presets="false"
     >
         <template #cell-source="{ row }">
-            <Link :href="row.edit_url" class="font-mono text-sm">{{ row.source }}</Link>
+            <Link v-if="row.edit_url" :href="row.edit_url" class="font-mono text-sm">{{ row.source }}</Link>
+            <span v-else class="font-mono text-sm">{{ row.source }}</span>
             <Badge v-if="row.automatic" size="sm" class="ms-2" :text="__('marketing-toolkit::cp.redirects.automatic')" />
         </template>
         <template #cell-target="{ row }">

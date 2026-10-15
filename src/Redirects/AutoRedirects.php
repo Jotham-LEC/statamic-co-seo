@@ -3,7 +3,6 @@
 namespace JothamLec\MarketingToolkit\Redirects;
 
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
 use JothamLec\MarketingToolkit\Support\Features;
 use JothamLec\MarketingToolkit\Support\Sites;
 use Statamic\Facades\User;
@@ -21,8 +20,8 @@ class AutoRedirects
      */
     public function create(string $from, string $to, ?string $site = null): void
     {
-        $from = Redirect::normalize($from);
-        $to = Redirect::normalize($to);
+        $from = Rule::normalize($from);
+        $to = Rule::normalize($to);
 
         if ($from === $to || ! Features::on('automatic_redirects')) {
             return;
@@ -37,8 +36,8 @@ class AutoRedirects
      */
     public function createForPrefix(string $from, string $to, ?string $site = null): void
     {
-        $from = Redirect::normalize($from);
-        $to = Redirect::normalize($to);
+        $from = Rule::normalize($from);
+        $to = Rule::normalize($to);
 
         if ($from === $to || $from === '/' || ! Features::on('automatic_redirects')) {
             return;
@@ -53,27 +52,27 @@ class AutoRedirects
      */
     private function write(string $source, string $target, string $from, string $to, string $live, ?string $site): void
     {
-        DB::transaction(function () use ($source, $target, $from, $to, $live, $site) {
+        $repository = app(RedirectRepository::class);
+
+        // One batch: one transaction in the database, or one write of the site's file.
+        $repository->batch(function () use ($repository, $source, $target, $from, $to, $live, $site) {
+            $rules = $repository->onSite($site);
+
             // The new address is live again, so we delete any rule that would send visitors away from it.
-            Redirect::query()->onSite($site)->where('source', $live)->delete();
+            $rules->filter(fn (Rule $rule) => $rule->source === $live)->each(fn (Rule $rule) => $repository->delete($rule));
 
             // Rules that point to the old address, or under it, follow it to the new one, unless that
-            // would send a rule back to its own address (such as `/x/*` to `/x/$1`). The LIKE clause
-            // only narrows the rows, because an `_` in a slug is a LIKE wildcard; the filter checks them.
-            Redirect::query()->onSite($site)->where(fn ($query) => $query->where('target', $from)->orWhere('target', 'like', $from.'/%'))->get()
-                ->filter(fn (Redirect $redirect) => $redirect->target === $from || str_starts_with((string) $redirect->target, $from.'/'))
-                ->each(function (Redirect $redirect) use ($from, $to) {
-                    $redirect->target = $to.substr($redirect->target, strlen($from));
-                    Redirect::pointsBack($redirect->source, $redirect->target) ? $redirect->delete() : $redirect->save();
+            // would send a rule back to its own address (such as `/x/*` to `/x/$1`).
+            $rules->filter(fn (Rule $rule) => $rule->source !== $live && ($rule->target === $from || str_starts_with((string) $rule->target, $from.'/')))
+                ->each(function (Rule $rule) use ($repository, $from, $to) {
+                    $rule->target = $to.substr((string) $rule->target, strlen($from));
+                    Rule::pointsBack($rule->source, $rule->target) ? $repository->delete($rule) : $repository->save($rule);
                 });
 
             // We create or update the site's rule from the old address, in any letter case when matching ignores case.
-            (Redirect::forSource($source, site: $site) ?? new Redirect)
-                ->fill(['site' => $site, 'source' => $source, 'target' => $target, 'status' => 301, 'active' => true, 'automatic' => true])
-                ->save();
-
-            // We flush the cache ourselves, because the bulk delete above bypasses the model events that clear it.
-            DB::afterCommit(fn () => Matcher::flush());
+            $repository->save(($repository->forSource($source, $site) ?? new Rule)->fill([
+                'site' => $site, 'source' => $source, 'target' => $target, 'status' => 301, 'active' => true, 'automatic' => true,
+            ]));
         });
     }
 

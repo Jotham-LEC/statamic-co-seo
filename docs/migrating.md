@@ -47,7 +47,7 @@ If you use an AI coding agent, such as Claude Code, the [migration skill](agent-
 ## 6. Move the redirects
 
 - [ ] Save the old redirects as a CSV file with the columns `source`, `target`, `status` and `active`, and add a `site` column on a multi-site install.
-- [ ] Import it under **Marketing → Redirects → Import CSV**, and check the rows it reports as skipped.
+- [ ] Import it under **Marketing → Redirects → Import CSV**, and check the rows it reports as skipped. It works on either driver; with redirects in files (the default), the import writes `content/redirects/`, so commit it.
 - [ ] Turn rules that used regular expressions into wildcards (`/blog/*` to `/articles/$1`), or keep them in the web server's configuration.
 - [ ] Remove any redirect routes from `routes/web.php` that the addon now handles.
 

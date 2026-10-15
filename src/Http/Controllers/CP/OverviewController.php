@@ -7,7 +7,7 @@ use Inertia\Response;
 use JothamLec\MarketingToolkit\Favicons\Favicons;
 use JothamLec\MarketingToolkit\NotFound\MissingPath;
 use JothamLec\MarketingToolkit\Og\Generator;
-use JothamLec\MarketingToolkit\Redirects\Redirect;
+use JothamLec\MarketingToolkit\Redirects\RedirectRepository;
 use JothamLec\MarketingToolkit\Reports\Report;
 use JothamLec\MarketingToolkit\SearchConsole\Client;
 use JothamLec\MarketingToolkit\SearchConsole\SearchStat;
@@ -54,7 +54,6 @@ final class OverviewController
         $variables = GlobalSet::findByHandle((string) config('marketing-toolkit.global'))?->in($site);
         // The Tracking tab is in Marketing settings, or in Brand on a site that hasn't moved it yet.
         $trackingSet = GlobalSet::findByHandle((string) config('marketing-toolkit.settings_global'))?->in($site) ?? $variables;
-        $redirects = fn () => Redirect::query()->where('active', true)->when(Sites::multiple(), fn ($query) => $query->appliesOn($site));
 
         return Inertia::render('marketing-toolkit::Overview', [
             'siteName' => $this->seo->settings()->siteName(),
@@ -67,8 +66,8 @@ final class OverviewController
             ],
             'report' => $this->report($user, $site),
             'redirects' => $user->can(Permissions::REDIRECTS) ? [
-                'active' => $redirects()->count(),
-                'automatic' => $redirects()->where('automatic', true)->count(),
+                'active' => app(RedirectRepository::class)->countActive(Sites::multiple() ? $site : null),
+                'automatic' => app(RedirectRepository::class)->countActive(Sites::multiple() ? $site : null, automatic: true),
                 'url' => cp_route('mt.redirects.index'),
             ] : null,
             'notFound' => [

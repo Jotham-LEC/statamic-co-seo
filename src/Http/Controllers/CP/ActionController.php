@@ -6,7 +6,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use JothamLec\MarketingToolkit\Cp\RecordActions;
 use JothamLec\MarketingToolkit\NotFound\MissingPath;
-use JothamLec\MarketingToolkit\Redirects\Redirect;
+use JothamLec\MarketingToolkit\Redirects\RedirectRepository;
+use JothamLec\MarketingToolkit\Redirects\Rule;
 use Statamic\Actions\Action;
 use Statamic\Facades\Site;
 use Statamic\Http\Controllers\CP\ActionController as StatamicActionController;
@@ -61,15 +62,19 @@ final class ActionController extends StatamicActionController
      *
      * @param  Collection<int, mixed>  $items
      * @param  array<string, mixed>  $context
-     * @return \Illuminate\Database\Eloquent\Collection<int, MissingPath>|\Illuminate\Database\Eloquent\Collection<int, Redirect>
+     * @return Collection<int, MissingPath>|Collection<int, Rule>
      */
     protected function getSelectedItems($items, $context)
     {
-        $query = ($context['type'] ?? null) === '404s'
-            ? MissingPath::query()->shownOn(Site::selected()->handle())
-            : Redirect::query()->accessible();
-        /** @var \Illuminate\Database\Eloquent\Collection<int, MissingPath>|\Illuminate\Database\Eloquent\Collection<int, Redirect> $selected */
-        $selected = $query->whereIn('id', $items->all())->get();
+        if (($context['type'] ?? null) === '404s') {
+            $selected = MissingPath::query()->shownOn(Site::selected()->handle())->whereIn('id', $items->all())->get();
+        } else {
+            $repository = app(RedirectRepository::class);
+            $selected = $items->unique()
+                ->map(fn ($id) => is_scalar($id) ? $repository->find((string) $id) : null)
+                ->filter(fn (?Rule $rule) => $rule !== null && $rule->isAccessible())
+                ->values();
+        }
 
         abort_if($selected->count() < $items->unique()->count(), 404);
 

@@ -4,7 +4,6 @@ use JothamLec\MarketingToolkit\Boost\Boost;
 use JothamLec\MarketingToolkit\Boost\Tools\MarketingToolkitPageSeo;
 use JothamLec\MarketingToolkit\Boost\Tools\MarketingToolkitRedirect;
 use JothamLec\MarketingToolkit\Boost\Tools\MarketingToolkitReport;
-use JothamLec\MarketingToolkit\Redirects\Redirect;
 use JothamLec\MarketingToolkit\Reports\Report;
 use Laravel\Mcp\Request;
 
@@ -46,14 +45,14 @@ test('the page tool shows what a page\'s head prints', function () {
 });
 
 test('the redirect tool finds the rule that answers a path', function () {
-    Redirect::query()->create(['source' => '/old/*', 'target' => '/new/$1', 'status' => 301]);
+    redirectRule(['source' => '/old/*', 'target' => '/new/$1', 'status' => 301]);
 
     $match = json_decode(boostTool(MarketingToolkitRedirect::class, ['path' => '/old/page']), true);
 
     expect($match)->toMatchArray(['status' => 301, 'target' => '/new/page'])
         ->and($match['rule']['source'])->toBe('/old/*')
         ->and(boostTool(MarketingToolkitRedirect::class, ['path' => '/elsewhere']))->toContain('No redirect answers /elsewhere');
-});
+})->group('redirects');
 
 test('the report tool lists the latest report\'s failing checks', function () {
     expect(boostTool(MarketingToolkitReport::class, []))->toContain('No finished report');

@@ -8,7 +8,6 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Vite;
 use Illuminate\Testing\TestResponse;
 use JothamLec\MarketingToolkit\NotFound\MissingPath;
-use JothamLec\MarketingToolkit\Redirects\Redirect;
 use JothamLec\MarketingToolkit\Reports\Report;
 use JothamLec\MarketingToolkit\SearchConsole\Client as SearchConsoleClient;
 use JothamLec\MarketingToolkit\SearchConsole\SearchStat;
@@ -362,9 +361,9 @@ test('a draft\'s address is a missing page, with an edit link to the draft', fun
 });
 
 test('redirects to this page, and one from its address that never applies', function () {
-    Redirect::query()->create(['source' => '/about-us', 'target' => '/about', 'hits' => 4]);
-    Redirect::query()->create(['source' => '/company', 'target' => 'https://example.test/about', 'hits' => 2]);
-    Redirect::query()->create(['source' => '/about', 'target' => '/elsewhere']);
+    redirectRule(['source' => '/about-us', 'target' => '/about', 'hits' => 4]);
+    redirectRule(['source' => '/company', 'target' => 'https://example.test/about', 'hits' => 2]);
+    redirectRule(['source' => '/about', 'target' => '/elsewhere']);
     $this->actingAs(cpUser(['manage marketing toolkit redirects', 'view pages entries']));
 
     toolbarFor('/about')->assertOk()
@@ -374,7 +373,7 @@ test('redirects to this page, and one from its address that never applies', func
         ])
         ->assertJsonPath('redirects.to_here.0.source', '/about-us')
         ->assertJsonPath('redirects.ignored.source', '/about');
-});
+})->group('redirects');
 
 test('tracking: which tags load, why none do, and Consent Mode', function () {
     seoGlobal(['gtm_id' => 'GTM-ABC1234', 'meta_pixel_id' => '123456789012', 'consent_mode' => true, 'consent_regions' => ['EEA']]);
