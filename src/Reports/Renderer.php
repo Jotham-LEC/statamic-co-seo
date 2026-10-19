@@ -4,6 +4,7 @@ namespace JothamLec\MarketingToolkit\Reports;
 
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Router;
 use Illuminate\Session\ArraySessionHandler;
 use Illuminate\Session\Store;
 use Illuminate\Support\Facades\Auth;
@@ -12,13 +13,15 @@ use Illuminate\Support\ViewErrorBag;
 use Statamic\Contracts\Entries\Entry;
 use Statamic\Contracts\Taxonomies\Term;
 use Statamic\View\Cascade;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Throwable;
 
 /**
  * Renders a page in this process, the way Statamic's front end would answer a
  * visit, but without an HTTP request. It makes a fresh request object, points
- * Statamic's cascade at it, takes the content's own response, and then puts
+ * Statamic's cascade at it, takes the content's own response (or the site's
+ * router's, when a route of the site's own answers the address), and then puts
  * everything back.
  *
  * It switches `noindex_outside_production` off while rendering, so a report run
@@ -54,7 +57,7 @@ class Renderer
         $signedIn = $this->signOut();
 
         try {
-            $response = $content->toResponse($request);
+            $response = $this->siteRoute($request) ? $this->throughRouter($request) : $content->toResponse($request);
 
             return new RenderedPage($response->getStatusCode(), (string) $response->getContent());
         } catch (HttpExceptionInterface $e) {
@@ -68,6 +71,39 @@ class Renderer
             $cascade->withRequest($previous);
             config(['marketing-toolkit.robots.noindex_outside_production' => $noindex]);
             $this->signBackIn($signedIn);
+        }
+    }
+
+    /**
+     * Whether one of the site's own routes answers this address, ahead of
+     * Statamic's catch-all: a page a controller draws from an entry, such as
+     * /case-studies/{slug}. The entry has a route but no template, so its own
+     * response would throw, though visitors see the page.
+     */
+    private function siteRoute(Request $request): bool
+    {
+        try {
+            return ! str_contains(app(Router::class)->getRoutes()->match($request)->uri(), '{segments');
+        } catch (HttpExceptionInterface) {
+            return false;
+        }
+    }
+
+    /**
+     * Answers the request as the site's router would answer a visit, with the
+     * route's middleware, on a session kept in memory so a render saves no
+     * session. An exception becomes the error page the visitor would get,
+     * reported as any other.
+     */
+    private function throughRouter(Request $request): Response
+    {
+        $driver = config('session.driver');
+        config(['session.driver' => 'array']);
+
+        try {
+            return app(Router::class)->dispatch($request);
+        } finally {
+            config(['session.driver' => $driver]);
         }
     }
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.29.2 – 2026-10-19
+
+### Fixed
+- **A report checks pages that a site's own route draws.** A page a controller shows from an entry, such as `/case-studies/{slug}`, has a collection route but no template, so the report took the entry's own response, which threw, and scored the page 0 with "The page couldn't be rendered", though visitors saw it. When a route of the site's answers the address ahead of Statamic's, the report now renders the page through the site's router, with the route's middleware and a session kept in memory. On moojing-global.com that was 26 of 509 pages.
+
+### Upgrading
+- **Nothing to do.** Pages Statamic serves render as before.
+
 ## 0.29.1 – 2026-10-16
 
 ### Fixed

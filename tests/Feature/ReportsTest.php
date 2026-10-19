@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\Sleep;
 use Inertia\Testing\AssertableInertia;
@@ -191,6 +192,22 @@ test('a page that fails to render scores zero and says why', function () {
     expect($this->getJson(cp_route('mt.reports.pages', $report))->json('data.0.issues.0'))
         ->toMatchArray(['label' => 'Page renders', 'status' => 'fail'])
         ->and($this->getJson(cp_route('mt.reports.pages', $report))->json('data.0.issues.0.message'))->not->toStartWith('marketing-toolkit::');
+});
+
+test('a page a site route draws from an entry renders as visitors get it', function () {
+    // As a site does when a controller shows the entry: the collection has a route but no template.
+    Collection::make('cases')->routes('cases/{slug}')->template('no-such-template')->save();
+    entryIn('cases', 'acme');
+    app('router')->getRoutes()->getByName('statamic.site')->fallback();
+    Route::middleware('web')->get('cases/{slug}', fn (string $slug) => "<html><head><title>Case {$slug}</title></head><body><h1>Case {$slug}</h1></body></html>");
+    app('router')->getRoutes()->refreshNameLookups();
+
+    $report = fullReport();
+    $page = reportPage($report, '/cases/acme');
+
+    expect($page->results)->not->toHaveKey('render')
+        ->and($page->facts['title'] ?? null)->toBe('Case acme')
+        ->and($report->summary['errors'])->toBe(0);
 });
 
 test('a page that throws shows the exception’s class, not its text, which goes to the log', function () {
