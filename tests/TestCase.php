@@ -3,6 +3,7 @@
 namespace JothamLec\MarketingToolkit\Tests;
 
 use Composer\Autoload\ClassLoader;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use JothamLec\MarketingToolkit\ServiceProvider;
@@ -63,6 +64,9 @@ abstract class TestCase extends AddonTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        // As a site with Model::shouldBeStrict() runs: reading a column a query didn't load throws.
+        Model::preventAccessingMissingAttributes();
 
         if ($token = self::token()) {
             $shared = $this->fakeStacheDirectory;

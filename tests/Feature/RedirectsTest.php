@@ -34,6 +34,15 @@ test('an exact rule sends a missing address on, and counts the hit', function ()
         ->and(freshRule($redirect)->lastHitAt)->not->toBeNull();
 });
 
+test('a rule matches on a site whose models refuse to read a column they didn\'t load', function () {
+    // The suite runs with Model::preventAccessingMissingAttributes() (TestCase), as a site with
+    // Model::shouldBeStrict() does. 0.29.0 to 0.29.2 read last_hit_at from a rule loaded without
+    // it, and on such a site every redirect answered 404.
+    rule('/old-page', '/new-page');
+
+    $this->get('/old-page')->assertStatus(301)->assertRedirect('https://example.test/new-page');
+});
+
 test('rules are stored and matched without the trailing slash or query string', function () {
     $redirect = rule('old-page/?ref=x', 'new-page/');
 

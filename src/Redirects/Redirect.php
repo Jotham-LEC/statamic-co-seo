@@ -211,7 +211,7 @@ class Redirect extends Model
             active: (bool) ($this->active ?? true),
             automatic: (bool) ($this->automatic ?? false),
             hits: (int) ($this->hits ?? 0),
-            lastHitAt: $this->last_hit_at,
+            lastHitAt: $this->last_hit_at ?? null,
         );
     }
 

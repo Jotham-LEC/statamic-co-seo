@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.29.3 – 2026-10-19
+
+### Fixed
+- **Redirects work on a site whose models are strict.** With the database driver and `Model::shouldBeStrict()` (or `Model::preventAccessingMissingAttributes()`) on, every redirect answered 404 from 0.29.0: the addon read when a rule was last used from a rule loaded without that column, and the error stopped the match. The addon's own tests now run strict, as such a site does.
+
+### Upgrading
+- **Update from any 0.29 release if your site turns strict models on.** Sites on the file driver, or without strict models, notice nothing.
+
 ## 0.29.2 – 2026-10-19
 
 ### Fixed
