@@ -24,9 +24,9 @@ final class TextFiles
 
     /**
      * Builds robots.txt from the paths the Brand global disallows (the control
-     * panel, unless it names others), the AI crawlers it turns away, its extra
-     * lines, and the sitemap. Everything is disallowed on a copy of the site
-     * that is kept out of search engines ($hidden).
+     * panel, unless it names others), its Content-Signal line, the AI crawlers
+     * it turns away, its extra lines, and the sitemap. Everything is disallowed
+     * on a copy of the site that is kept out of search engines ($hidden).
      */
     public function robots(bool $hidden, string $sitemapUrl, ?string $newsSitemapUrl = null): string
     {
@@ -40,6 +40,10 @@ final class TextFiles
 
         foreach ($disallow as $path) {
             $lines[] = 'Disallow: '.$path;
+        }
+
+        if ($this->settings->bool('content_signals', true)) {
+            $lines[] = $this->contentSignal();
         }
 
         array_push($lines, ...$this->aiCrawlerRules());
@@ -149,6 +153,19 @@ final class TextFiles
         }
 
         return $lines;
+    }
+
+    /**
+     * Builds the Content-Signal line (contentsignals.org) from the AI switches:
+     * search is always allowed, ai-input (pages used in AI answers) follows AI
+     * search, and ai-train follows AI training. It sits in the `User-agent: *`
+     * group, so it covers every crawler.
+     */
+    private function contentSignal(): string
+    {
+        $signal = fn (string $setting) => $this->settings->bool($setting, true) ? 'yes' : 'no';
+
+        return 'Content-Signal: search=yes, ai-input='.$signal('allow_ai_search').', ai-train='.$signal('allow_ai_training');
     }
 
     /**

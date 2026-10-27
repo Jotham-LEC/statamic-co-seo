@@ -5,6 +5,7 @@ use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Support\Facades\Http;
 use JothamLec\MarketingToolkit\IndexNow\IndexNow;
+use JothamLec\MarketingToolkit\TextFiles\TextFiles;
 use Statamic\Facades\Entry;
 
 describe('snippets', function () {
@@ -41,6 +42,34 @@ describe('AI crawlers in robots.txt', function () {
 
         expect($this->get('/robots.txt')->getContent())->toContain("User-agent: OAI-SearchBot\nUser-agent: Claude-SearchBot\nUser-agent: PerplexityBot\nDisallow: /")
             ->not->toContain('GPTBot');
+    });
+});
+
+describe('Content signals in robots.txt', function () {
+    test('say what the AI switches allow, in the group for every crawler', function () {
+        seoGlobal([]);
+
+        expect($this->get('/robots.txt')->getContent())->toStartWith("User-agent: *\nDisallow: /cp/\nContent-Signal: search=yes, ai-input=yes, ai-train=yes\n");
+
+        seoGlobal(['allow_ai_training' => false, 'allow_ai_search' => true]);
+
+        expect($this->get('/robots.txt')->getContent())->toContain('Content-Signal: search=yes, ai-input=yes, ai-train=no');
+
+        seoGlobal(['allow_ai_training' => true, 'allow_ai_search' => false]);
+
+        expect($this->get('/robots.txt')->getContent())->toContain('Content-Signal: search=yes, ai-input=no, ai-train=yes');
+    });
+
+    test('are left out when the site turns them off, for a CDN that adds its own', function () {
+        seoGlobal(['content_signals' => false, 'allow_ai_training' => false]);
+
+        expect($this->get('/robots.txt')->getContent())->not->toContain('Content-Signal')
+            ->toContain('User-agent: GPTBot');
+    });
+
+    test('are left out of a copy of the site kept out of search engines', function () {
+        expect(app(TextFiles::class)->robots(true, 'https://example.test/sitemap.xml'))
+            ->toBe("User-agent: *\nDisallow: /\n");
     });
 });
 

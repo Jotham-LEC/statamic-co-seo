@@ -144,6 +144,9 @@ tabs:
             handle: allow_ai_search
             field: { type: toggle, display: 'marketing-toolkit::fields.brand.allow_ai_search.display', default: true, width: 50 }
           -
+            handle: content_signals
+            field: { type: toggle, display: 'marketing-toolkit::fields.brand.content_signals.display', instructions: 'marketing-toolkit::fields.brand.content_signals.instructions', default: true }
+          -
             handle: robots_extra
             field: { type: textarea, display: 'marketing-toolkit::fields.brand.robots_extra.display' }
           -

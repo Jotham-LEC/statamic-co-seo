@@ -392,6 +392,10 @@ return [
         'allow_ai_search' => [
             'display' => 'Allow AI search',
         ],
+        'content_signals' => [
+            'display' => 'Content signals',
+            'instructions' => 'Adds a Content-Signal line to robots.txt that says what the two AI switches allow: search, AI answers (AI search) and AI training. Turn it off if Cloudflare\'s managed robots.txt adds its own line, or the file says it twice.',
+        ],
         'robots_extra' => [
             'display' => 'robots.txt extra lines',
         ],

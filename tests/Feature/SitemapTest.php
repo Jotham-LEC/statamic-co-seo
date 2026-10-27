@@ -117,7 +117,7 @@ test('robots.txt lets crawlers in on production, names the sitemap, and shuts th
     seoGlobal(['robots_extra' => "User-agent: GPTBot\nAllow: /"]);
 
     expect($this->get('/robots.txt')->assertOk()->getContent())->toBe(
-        "User-agent: *\nDisallow: /cp/\n\nUser-agent: GPTBot\nAllow: /\n\nSitemap: https://example.test/sitemap.xml\n"
+        "User-agent: *\nDisallow: /cp/\nContent-Signal: search=yes, ai-input=yes, ai-train=yes\n\nUser-agent: GPTBot\nAllow: /\n\nSitemap: https://example.test/sitemap.xml\n"
     );
 
     $this->app['env'] = 'staging';

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.30.0 – 2026-10-27
+
+### Added
+- **robots.txt carries a Content-Signal line.** The `User-agent: *` group now says, in the [Content Signals](https://contentsignals.org/) format, what the **Allow AI search** and **Allow AI training** switches allow: `Content-Signal: search=yes, ai-input=yes, ai-train=yes` with both on, and `no` for either one turned off. A new **Content signals** switch on the Crawlers tab of Marketing settings, on by default, leaves the line out for a site whose CDN adds its own, such as Cloudflare's managed robots.txt.
+
+### Upgrading
+- **The update adds the Content signals switch to Marketing settings, and robots.txt gains the line at once.** A site behind Cloudflare with Bot Preference Sync on, which prepends its own `Content-signal` line, should turn the switch off.
+
 ## 0.29.3 – 2026-10-19
 
 ### Fixed
