@@ -5,6 +5,7 @@ namespace JothamLec\MarketingToolkit\Http\Middleware;
 use Closure;
 use DOMDocument;
 use DOMElement;
+use DOMText;
 use DOMXPath;
 use Illuminate\Http\Request;
 use JothamLec\MarketingToolkit\Settings;
@@ -28,7 +29,7 @@ use Symfony\Component\Yaml\Yaml;
 final class NegotiateMarkdown
 {
     /** Elements that carry no text an agent can read, or only controls. */
-    private const array REMOVE = ['script', 'style', 'noscript', 'template', 'svg', 'form', 'button', 'iframe'];
+    private const array REMOVE = ['script', 'style', 'noscript', 'template', 'svg', 'form', 'iframe'];
 
     public function __construct(private Settings $settings, private TextFiles $textFiles) {}
 
@@ -122,28 +123,93 @@ final class NegotiateMarkdown
         $body = '';
 
         if ($root instanceof DOMElement) {
-            $query = implode(' | ', [...array_map(fn (string $tag) => './/'.$tag, self::REMOVE), './/*[@hidden]', './/*[@aria-hidden="true"]']);
+            $this->tidy($xpath, $root, $origin);
 
-            foreach (iterator_to_array($xpath->query($query, $root) ?: []) as $node) {
-                $node->parentNode?->removeChild($node);
-            }
-
-            foreach (iterator_to_array($xpath->query('.//*[@href or @src]', $root) ?: []) as $element) {
-                foreach (['href', 'src'] as $attribute) {
-                    if ($element instanceof DOMElement && $element->hasAttribute($attribute)) {
-                        $element->setAttribute($attribute, $this->absolute($element->getAttribute($attribute), $origin));
-                    }
-                }
-            }
-
-            $converter = new HtmlConverter(['header_style' => 'atx', 'strip_tags' => true, 'strip_placeholder_links' => true]);
+            $converter = new HtmlConverter(['header_style' => 'atx', 'hard_break' => true, 'strip_tags' => true, 'strip_placeholder_links' => true]);
             $converter->getEnvironment()->addConverter(new TableConverter);
             $body = $converter->convert((string) $document->saveHTML($root));
         }
 
+        // The converter leaves entities as the HTML had them (`&amp;`). Markdown reads them, but an agent
+        // reads the text, so they are decoded, except `&lt;` and `&gt;`, which would turn text into tags.
+        $body = (string) preg_replace_callback('/&(?!lt;|gt;)(#\d+|#x[0-9a-f]+|[a-z][a-z0-9]*);/i', fn (array $entity) => html_entity_decode($entity[0], ENT_QUOTES | ENT_HTML5, 'UTF-8'), $body);
+        // The space HTML kept around inline elements ends up at the ends of lines and after a heading's `#`.
+        // Fenced code keeps its spacing.
+        $parts = preg_split('/(^```.*?^```$)/ms', $body, -1, PREG_SPLIT_DELIM_CAPTURE) ?: [$body];
+        $body = implode('', array_map(fn (string $part, int $index) => $index % 2 === 1 ? $part
+            : (string) preg_replace(['/[ \t]+$/m', '/^ (?=\S)/m', '/^(#{1,6}) {2,}/m', '/(?<=\S) {2,}(?=\S)/'], ['', '', '$1 ', ' '], $part), $parts, array_keys($parts)));
         $body = trim((string) preg_replace("/\n{3,}/", "\n\n", $body));
 
         return ["---\n".Yaml::dump($front)."---\n\n".$body."\n", $canonical];
+    }
+
+    /**
+     * Takes out what an agent can't read, keeps the text of controls that hold content, and makes
+     * the page's own addresses absolute.
+     */
+    private function tidy(DOMXPath $xpath, DOMElement $root, string $origin): void
+    {
+        $query = implode(' | ', [...array_map(fn (string $tag) => './/'.$tag, self::REMOVE), './/*[@hidden]', './/*[@aria-hidden="true"]']);
+
+        foreach (iterator_to_array($xpath->query($query, $root) ?: []) as $node) {
+            $node->parentNode?->removeChild($node);
+        }
+
+        // A button's text can be content, such as an accordion's question, so it stays and the button goes.
+        foreach (iterator_to_array($xpath->query('.//button', $root) ?: []) as $button) {
+            while ($button->firstChild) {
+                $button->parentNode?->insertBefore($button->firstChild, $button);
+            }
+
+            $button->parentNode?->removeChild($button);
+        }
+
+        // HTML reads any run of whitespace as one space, but the converter drops a line break that starts
+        // a text node, which would join `</span>\nby` into one word.
+        foreach (iterator_to_array($xpath->query('.//text()[not(ancestor::pre) and not(ancestor::code)]', $root) ?: []) as $text) {
+            $text->nodeValue = (string) preg_replace('/[ \t\r\n]+/', ' ', (string) $text->nodeValue);
+        }
+
+        // A line break in a heading would join the words on either side of it.
+        foreach (iterator_to_array($xpath->query('.//*[self::h1 or self::h2 or self::h3 or self::h4 or self::h5 or self::h6]//br', $root) ?: []) as $break) {
+            $break->parentNode?->replaceChild($root->ownerDocument->createTextNode(' '), $break);
+        }
+
+        // A link with only an icon is named by its aria-label, or else left out, and a link's text loses
+        // the space at its ends, which would print as `[ Home ](…)`.
+        foreach (iterator_to_array($xpath->query('.//a', $root) ?: []) as $link) {
+            if (! $link instanceof DOMElement) {
+                continue;
+            }
+
+            if ($link->firstChild instanceof DOMText) {
+                $link->firstChild->nodeValue = ltrim((string) $link->firstChild->nodeValue);
+            }
+
+            if ($link->lastChild instanceof DOMText) {
+                $link->lastChild->nodeValue = rtrim((string) $link->lastChild->nodeValue);
+            }
+
+            if (trim($link->textContent) !== '' || $xpath->query('.//img', $link)->length > 0) {
+                continue;
+            }
+
+            $label = trim($link->getAttribute('aria-label'));
+
+            if ($label === '') {
+                $link->parentNode?->removeChild($link);
+            } else {
+                $link->textContent = $label;
+            }
+        }
+
+        foreach (iterator_to_array($xpath->query('.//*[@href or @src]', $root) ?: []) as $element) {
+            foreach (['href', 'src'] as $attribute) {
+                if ($element instanceof DOMElement && $element->hasAttribute($attribute)) {
+                    $element->setAttribute($attribute, $this->absolute($element->getAttribute($attribute), $origin));
+                }
+            }
+        }
     }
 
     /** Makes a root-relative address (`/about`) absolute, and leaves every other address as it is. */

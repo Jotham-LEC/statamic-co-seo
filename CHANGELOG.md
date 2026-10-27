@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.31.1 – 2026-10-27
+
+### Fixed
+- **Markdown for agents keeps the text of buttons.** An accordion's question is often the text of a `<button>`, and 0.31.0 left buttons out, so an FAQ came out as answers with no questions. A button is now replaced by its text; one with only an icon leaves nothing, and a form's buttons still go with the form.
+- **Words no longer run together in the Markdown.** A line break in the HTML just before a word after an inline element (`</span>` then a new line, as minified HTML often has) joined the two words, and a `<br>` in a heading did the same. Both now read as a space.
+- **The Markdown reads as plain text.** Entities such as `&amp;` are decoded (except `&lt;` and `&gt;`), the space at the ends of lines and inside link text is gone, and an icon-only link is named by its `aria-label` or left out, rather than printed as `[ ](…)`.
+
+### Upgrading
+- **Nothing to do.** Pages are converted as before, with these fixes.
+
 ## 0.31.0 – 2026-10-27
 
 ### Added

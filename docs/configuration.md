@@ -287,7 +287,7 @@ While the site serves `/llms.txt` (the addon's, a route of the site's own, or a 
 |---|---|---|
 | `markdown.enabled` | `true` | A request whose `Accept` header ranks `text/markdown` above `text/html` (`Accept: text/markdown`, as AI agents send) gets the page as Markdown instead of HTML. |
 
-The Markdown is the page's `<main>` element, or its `<body>` on a layout without one, converted with headings as `#`, links and images made absolute, and tables kept. Scripts, styles, `<noscript>`, `<template>`, SVG, forms, buttons, iframes and anything `hidden` or `aria-hidden="true"` are left out, so put the navigation, footer and cookie banner outside `<main>`. Content hidden only until a script runs (Alpine's `x-cloak`, tab panels) stays in. It starts with front matter from the page's `<title>`, meta description and canonical address:
+The Markdown is the page's `<main>` element, or its `<body>` on a layout without one, converted with headings as `#`, links and images made absolute, and tables kept. Scripts, styles, `<noscript>`, `<template>`, SVG, forms, iframes and anything `hidden` or `aria-hidden="true"` are left out, so put the navigation, footer and cookie banner outside `<main>`, and mark the second copy of a looping logo marquee `aria-hidden`. A button keeps its text (an accordion's question), and a link with only an icon takes its `aria-label`. Content hidden only until a script runs (Alpine's `x-cloak`, tab panels) stays in. It starts with front matter from the page's `<title>`, meta description and canonical address:
 
 ```markdown
 ---
