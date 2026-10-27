@@ -237,6 +237,7 @@ return [
             'sitemap' => ['display' => 'Sitemap'],
             'robots_txt' => ['display' => 'robots.txt'],
             'llms_txt' => ['display' => 'llms.txt'],
+            'markdown_negotiation' => ['display' => 'Markdown for AI agents'],
             'hreflang' => ['display' => 'Languages (hreflang)'],
             'indexnow' => ['display' => 'IndexNow'],
             'share_cards' => ['display' => 'Generated share cards'],

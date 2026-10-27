@@ -3,6 +3,7 @@
 namespace JothamLec\MarketingToolkit;
 
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Support\Facades\Queue;
@@ -11,8 +12,10 @@ use JothamLec\MarketingToolkit\Conversions\Attribution;
 use JothamLec\MarketingToolkit\Cp\Navigation;
 use JothamLec\MarketingToolkit\Events\RedirectDeleted;
 use JothamLec\MarketingToolkit\Events\RedirectSaved;
+use JothamLec\MarketingToolkit\Http\Middleware\AdvertiseLlmsTxt;
 use JothamLec\MarketingToolkit\Http\Middleware\HandleMissing;
 use JothamLec\MarketingToolkit\Http\Middleware\MarkToolbarUser;
+use JothamLec\MarketingToolkit\Http\Middleware\NegotiateMarkdown;
 use JothamLec\MarketingToolkit\IndexNow\IndexNow;
 use JothamLec\MarketingToolkit\Legacy\OldConfig;
 use JothamLec\MarketingToolkit\Listeners\CountConversion;
@@ -147,6 +150,13 @@ class ServiceProvider extends AddonServiceProvider
 
     public function bootAddon(): void
     {
+        // Global, not in a route group: Statamic's static cache keeps the headers a response has once
+        // the route's middleware are done, so a page converted to Markdown there would be cached as
+        // HTML under Markdown's Content-Type. Out here the cache has already kept the HTML page.
+        $kernel = $this->app->make(Kernel::class);
+        $kernel->pushMiddleware(NegotiateMarkdown::class);
+        $kernel->pushMiddleware(AdvertiseLlmsTxt::class);
+
         $this->publishes([__DIR__.'/../config/marketing-toolkit.php' => config_path('marketing-toolkit.php')], 'marketing-toolkit-config');
 
         // The page's own script writes and reads these cookies, so they are left as plain text.

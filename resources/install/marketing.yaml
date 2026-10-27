@@ -168,6 +168,9 @@ tabs:
             handle: feature_llms_txt
             field: { type: toggle, display: 'marketing-toolkit::cp.features.modules.llms_txt.display', default: true, width: 50 }
           -
+            handle: feature_markdown_negotiation
+            field: { type: toggle, display: 'marketing-toolkit::cp.features.modules.markdown_negotiation.display', default: true, width: 50 }
+          -
             handle: feature_hreflang
             field: { type: toggle, display: 'marketing-toolkit::cp.features.modules.hreflang.display', default: true, width: 50 }
           -

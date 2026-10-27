@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.31.0 – 2026-10-27
+
+### Added
+- **AI agents can ask for a page as Markdown.** A request whose `Accept` header ranks `text/markdown` above `text/html` gets the page's `<main>` as Markdown, under front matter with its title, description and canonical address, without scripts, forms, SVG or hidden elements, and with links made absolute. The response carries `Content-Type: text/markdown; charset=utf-8`, an `x-markdown-tokens` estimate, a canonical `Link`, and the `Content-Signal` that robots.txt prints. It works under Statamic's `half` static cache, which keeps serving HTML to browsers. **Markdown for AI agents** under Features (`markdown.enabled`) switches it off. See [configuration.md](docs/configuration.md#markdown-for-ai-agents).
+- **The home page links to llms.txt in its headers.** While the site serves `/llms.txt`, the addon's or its own, the home page answers with `Link: </llms.txt>; rel="describedby"; type="text/plain"`.
+
+### Upgrading
+- **Every HTML page now carries `Vary: Accept`.** A CDN that caches HTML must vary by `Accept` or bypass its cache for `text/markdown`, or agents and browsers may get each other's copy; Cloudflare doesn't cache HTML unless a cache rule tells it to. The update adds the Markdown for AI agents switch to Features, on.
+- **The addon now requires `league/html-to-markdown`.** Composer installs it with the update.
+
 ## 0.30.0 – 2026-10-27
 
 ### Added

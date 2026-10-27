@@ -31,6 +31,7 @@ final class AddNewBrandFields extends UpdateScript
         '0.25.0' => ['og_logo'],
         '0.27.2' => ['site_tracking'],
         '0.30.0' => ['content_signals'],
+        '0.31.0' => ['feature_markdown_negotiation'],
     ];
 
     /** @var list<string>|null the fields this update brings, as shouldUpdate() found them */

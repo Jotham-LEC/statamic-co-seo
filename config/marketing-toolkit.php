@@ -166,6 +166,11 @@ return [
         'enabled' => true,
     ],
 
+    // A page asked for with `Accept: text/markdown` is answered with its <main> as Markdown, for AI agents.
+    'markdown' => [
+        'enabled' => true,
+    ],
+
     // /ads.txt serves the lines in Marketing settings → Crawlers, when there are any.
     'ads_txt' => [
         'enabled' => true,

@@ -43,7 +43,7 @@ final class TextFiles
         }
 
         if ($this->settings->bool('content_signals', true)) {
-            $lines[] = $this->contentSignal();
+            $lines[] = 'Content-Signal: '.$this->contentSignal();
         }
 
         array_push($lines, ...$this->aiCrawlerRules());
@@ -156,16 +156,17 @@ final class TextFiles
     }
 
     /**
-     * Builds the Content-Signal line (contentsignals.org) from the AI switches:
+     * Builds the Content-Signal value (contentsignals.org) from the AI switches:
      * search is always allowed, ai-input (pages used in AI answers) follows AI
-     * search, and ai-train follows AI training. It sits in the `User-agent: *`
-     * group, so it covers every crawler.
+     * search, and ai-train follows AI training. robots.txt prints it in the
+     * `User-agent: *` group, so it covers every crawler, and a page sent as
+     * Markdown carries it as a header.
      */
-    private function contentSignal(): string
+    public function contentSignal(): string
     {
         $signal = fn (string $setting) => $this->settings->bool($setting, true) ? 'yes' : 'no';
 
-        return 'Content-Signal: search=yes, ai-input='.$signal('allow_ai_search').', ai-train='.$signal('allow_ai_training');
+        return 'search=yes, ai-input='.$signal('allow_ai_search').', ai-train='.$signal('allow_ai_training');
     }
 
     /**

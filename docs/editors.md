@@ -128,7 +128,7 @@ Use it to catch broken links. For a missing address that should lead somewhere, 
 - **robots.txt extra lines**: extra rules, for example for AI crawlers.
 - **ads.txt**: only for a site that sells ad space (AdSense and others): paste the lines your ad network gives you; they're served at `/ads.txt`.
 
-The site also serves **/llms.txt**, a list of its pages with their descriptions for AI assistants, made from the same pages as the sitemap.
+The site also serves **/llms.txt**, a list of its pages with their descriptions for AI assistants, made from the same pages as the sitemap, and the home page points to it in its headers. An AI agent that asks for a page as Markdown gets the page's main content as Markdown instead of HTML, without the menu or footer, carrying the same content signals; **Markdown for AI agents** under [Features](#features) switches that off.
 
 ## Features
 

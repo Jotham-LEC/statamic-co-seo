@@ -1,0 +1,20 @@
+<!doctype html>
+<html>
+<head>{{ mt:meta }}<style>main { color: red }</style></head>
+<body>
+<nav><a href="/">Site menu</a></nav>
+<main id="main-content">
+    {{ template_content }}
+    <p>Read <a href="/essays/first">the first essay</a> or <a href="https://elsewhere.test/page">another site</a>.</p>
+    <p><img src="/assets/chart.png" alt="A chart"></p>
+    <div x-cloak>Tab panel text</div>
+    <div hidden>Hidden text</div>
+    <span aria-hidden="true">Decorative text</span>
+    <svg><text>Icon text</text></svg>
+    <form><label>Email</label><button>Subscribe</button></form>
+    <script>var tracking = 'Script text';</script>
+    <table><tr><th>Year</th><th>Sales</th></tr><tr><td>2025</td><td>12</td></tr></table>
+</main>
+<footer>Site footer</footer>
+</body>
+</html>

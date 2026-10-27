@@ -18,6 +18,7 @@ final class Features
         'sitemap' => 'marketing-toolkit.sitemap.enabled',
         'robots_txt' => 'marketing-toolkit.robots_txt.enabled',
         'llms_txt' => 'marketing-toolkit.llms_txt.enabled',
+        'markdown_negotiation' => 'marketing-toolkit.markdown.enabled',
         'ads_txt' => 'marketing-toolkit.ads_txt.enabled',
         'hreflang' => 'marketing-toolkit.hreflang.enabled',
         'indexnow' => 'marketing-toolkit.indexnow.enabled',

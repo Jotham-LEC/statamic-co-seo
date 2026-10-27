@@ -231,7 +231,7 @@ Uploaded share images are cropped to 1200×630 and served as JPEG; for another s
 
 ## Features
 
-The **Features** tab of **Marketing → Settings** has a switch per module, on the default site and for whoever may change the addon's settings: the sitemap, robots.txt, llms.txt, hreflang, IndexNow, generated share cards, redirects, redirects when a page moves, the 404 log, scheduled reports, tracking and Consent Mode, leads, favicons, ads.txt and the front-end toolbar. What's off is copied to the addon settings (`features_off`) when the tab is saved and set off in the config at boot: its addresses answer 404, and its listeners and middleware aren't loaded, so it costs nothing on a request. Nothing it saved is deleted. Its routes stay registered, so cached routes (`php artisan route:cache`, `optimize`) follow a switch without being cached again. A route of the site's own for one of the addresses (its own `sitemap.xml`, say) keeps it: the addon then doesn't register its route there.
+The **Features** tab of **Marketing → Settings** has a switch per module, on the default site and for whoever may change the addon's settings: the sitemap, robots.txt, llms.txt, Markdown for AI agents, hreflang, IndexNow, generated share cards, redirects, redirects when a page moves, the 404 log, scheduled reports, tracking and Consent Mode, leads, favicons, ads.txt and the front-end toolbar. What's off is copied to the addon settings (`features_off`) when the tab is saved and set off in the config at boot: its addresses answer 404, and its listeners and middleware aren't loaded, so it costs nothing on a request. Nothing it saved is deleted. Its routes stay registered, so cached routes (`php artisan route:cache`, `optimize`) follow a switch without being cached again. A route of the site's own for one of the addresses (its own `sitemap.xml`, say) keeps it: the addon then doesn't register its route there.
 
 Since the switches apply at boot, a process that boots once and serves many requests or jobs (Laravel Octane, a queue worker, Horizon) picks up a change when it restarts: run `php artisan octane:reload` or `php artisan queue:restart` after switching a module on or off. A PHP-FPM site picks it up from the next request.
 
@@ -270,7 +270,7 @@ The cookie is set when someone who may access the control panel signs in, and on
 
 Its corner (any of the four) and whether it is hidden are set in the toolbar's own **Toolbar settings** panel (the gear) and kept in each browser; the server keeps nothing of them. **Alt+Shift+M** opens and closes it. A hidden toolbar makes no request until that shortcut brings it back.
 
-## llms.txt and ads.txt
+## llms.txt, Markdown and ads.txt
 
 | Key | Default | |
 |---|---|---|
@@ -278,6 +278,30 @@ Its corner (any of the four) and whether it is hidden are set in the toolbar's o
 | `ads_txt.enabled` | `true` | `/ads.txt`: the lines in **Marketing → Settings → Crawlers → ads.txt**; a 404 while that's empty. |
 
 A file of the same name in `public/` wins over either.
+
+While the site serves `/llms.txt` (the addon's, a route of the site's own, or a file in `public/`), the home page's response carries `Link: </llms.txt>; rel="describedby"; type="text/plain"`, so an agent that reads only headers can find it.
+
+### Markdown for AI agents
+
+| Key | Default | |
+|---|---|---|
+| `markdown.enabled` | `true` | A request whose `Accept` header ranks `text/markdown` above `text/html` (`Accept: text/markdown`, as AI agents send) gets the page as Markdown instead of HTML. |
+
+The Markdown is the page's `<main>` element, or its `<body>` on a layout without one, converted with headings as `#`, links and images made absolute, and tables kept. Scripts, styles, `<noscript>`, `<template>`, SVG, forms, buttons, iframes and anything `hidden` or `aria-hidden="true"` are left out, so put the navigation, footer and cookie banner outside `<main>`. Content hidden only until a script runs (Alpine's `x-cloak`, tab panels) stays in. It starts with front matter from the page's `<title>`, meta description and canonical address:
+
+```markdown
+---
+title: 'About us | Acme'
+description: 'Who we are, and what we make.'
+url: 'https://example.com/about'
+---
+
+# About us
+```
+
+The response is `Content-Type: text/markdown; charset=utf-8`, with `x-markdown-tokens` (an estimate of its length in tokens, a quarter of its bytes), `Link: <canonical>; rel="canonical"`, and, while **Content signals** is on, the `Content-Signal` header robots.txt prints. Only a GET or HEAD answered with a 200 is converted, never the control panel. Every HTML page carries `Vary: Accept`, as its address now has two forms.
+
+It runs as global middleware, outside the routes, so it also converts pages the site's own controllers draw. Statamic's `half` static cache keeps storing and serving HTML, and the page is converted on its way out, so a browser never gets a cached Markdown copy. The `full` strategy serves pages from files without PHP, so those pages stay HTML for everyone; a CDN that caches HTML must vary its cache by `Accept` or bypass it for `text/markdown`.
 
 ## Favicons
 

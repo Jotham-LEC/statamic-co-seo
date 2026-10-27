@@ -17,6 +17,7 @@
         "php": "^8.3",
         "ext-curl": "*",
         "ext-dom": "*",
+        "league/html-to-markdown": "^5.2",
         "simonhamp/the-og": "^0.8",
         "statamic/cms": "^6.34"
     },
