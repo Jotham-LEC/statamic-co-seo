@@ -35,9 +35,26 @@ final class NegotiateMarkdown
 
     public function handle(Request $request, Closure $next): Response
     {
-        $response = $next($request);
+        $skipped = StatamicRoutes::owns($request->getPathInfo()) || str_starts_with(ltrim($request->getPathInfo(), '/'), 'livewire');
 
-        if (! self::isHtml($response) || StatamicRoutes::owns($request->getPathInfo()) || str_starts_with(ltrim($request->getPathInfo(), '/'), 'livewire')) {
+        // The router empties a HEAD response's body before global middleware see it, which would leave
+        // nothing to convert, so a HEAD that wants Markdown is answered as a GET and loses its body
+        // here: its headers are then the GET's, token count and canonical address included.
+        $head = ! $skipped && $request->isMethod('HEAD') && $this->wantsMarkdown($request);
+
+        if ($head) {
+            $request->setMethod('GET');
+        }
+
+        try {
+            $response = $next($request);
+        } finally {
+            if ($head) {
+                $request->setMethod('HEAD');
+            }
+        }
+
+        if ($skipped || ! self::isHtml($response)) {
             return $response;
         }
 
@@ -64,6 +81,11 @@ final class NegotiateMarkdown
 
         if ($this->settings->bool('content_signals', true)) {
             $response->headers->set('Content-Signal', $this->textFiles->contentSignal());
+        }
+
+        if ($head) {
+            $response->headers->set('Content-Length', (string) strlen($markdown));
+            $response->setContent('');
         }
 
         return $response;

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.31.2 – 2026-10-27
+
+### Fixed
+- **A HEAD request for Markdown gets Markdown's headers.** Laravel's router empties a HEAD response's body before global middleware see it, so 0.31.0 had nothing to convert and answered `curl -I -H 'Accept: text/markdown'` with `text/html`. Such a request is now rendered as a GET and sent without its body, so its headers are those a GET gets: `text/markdown`, `x-markdown-tokens`, the canonical `Link` and `Content-Signal`.
+
+### Upgrading
+- **Nothing to do.** A HEAD request that wants Markdown now renders the page as a GET does, and can fill the static cache with its HTML.
+
 ## 0.31.1 – 2026-10-27
 
 ### Fixed

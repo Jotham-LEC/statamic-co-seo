@@ -299,7 +299,7 @@ url: 'https://example.com/about'
 # About us
 ```
 
-The response is `Content-Type: text/markdown; charset=utf-8`, with `x-markdown-tokens` (an estimate of its length in tokens, a quarter of its bytes), `Link: <canonical>; rel="canonical"`, and, while **Content signals** is on, the `Content-Signal` header robots.txt prints. Only a GET or HEAD answered with a 200 is converted, never the control panel. Every HTML page carries `Vary: Accept`, as its address now has two forms.
+The response is `Content-Type: text/markdown; charset=utf-8`, with `x-markdown-tokens` (an estimate of its length in tokens, a quarter of its bytes), `Link: <canonical>; rel="canonical"`, and, while **Content signals** is on, the `Content-Signal` header robots.txt prints. Only a GET or HEAD answered with a 200 is converted, never the control panel; a HEAD is rendered as a GET and sent with the same headers and no body. Every HTML page carries `Vary: Accept`, as its address now has two forms.
 
 It runs as global middleware, outside the routes, so it also converts pages the site's own controllers draw. Statamic's `half` static cache keeps storing and serving HTML, and the page is converted on its way out, so a browser never gets a cached Markdown copy. The `full` strategy serves pages from files without PHP, so those pages stay HTML for everyone; a CDN that caches HTML must vary its cache by `Accept` or bypass it for `text/markdown`.
 

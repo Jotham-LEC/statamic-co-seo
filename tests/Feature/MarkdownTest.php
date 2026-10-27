@@ -60,6 +60,18 @@ describe('A page asked for as Markdown', function () {
             ->assertHeaderMissing('Content-Signal');
     });
 
+    test('answers a HEAD request with the headers a GET gets, and no body', function () {
+        $get = $this->get('https://example.test/about', ['Accept' => 'text/markdown']);
+        $head = $this->call('HEAD', 'https://example.test/about', server: ['HTTP_ACCEPT' => 'text/markdown'])->assertOk()
+            ->assertHeader('Content-Type', 'text/markdown; charset=utf-8')
+            ->assertHeader('Vary', 'Accept')
+            ->assertHeader('Link', '<https://example.test/about>; rel="canonical"')
+            ->assertHeader('Content-Signal', 'search=yes, ai-input=yes, ai-train=yes')
+            ->assertHeader('x-markdown-tokens', $get->headers->get('x-markdown-tokens'));
+
+        expect($head->getContent())->toBe('');
+    });
+
     test('is HTML when the module is switched off', function () {
         config(['marketing-toolkit.markdown.enabled' => false]);
 
@@ -94,6 +106,8 @@ describe('A browser', function () {
     test('never gets a Markdown copy from the static cache, nor an agent an HTML one', function () {
         config(['statamic.static_caching.strategy' => 'half']);
 
+        // A HEAD is rendered as a GET, so it is the first request to fill the cache.
+        $this->call('HEAD', 'https://example.test/about', server: ['HTTP_ACCEPT' => 'text/markdown'])->assertHeader('Content-Type', 'text/markdown; charset=utf-8');
         $this->get('https://example.test/about', ['Accept' => 'text/markdown'])->assertHeader('Content-Type', 'text/markdown; charset=utf-8');
         $html = $this->get('https://example.test/about', ['Accept' => 'text/html']);
 
